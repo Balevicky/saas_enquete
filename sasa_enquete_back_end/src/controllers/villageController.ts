@@ -19,7 +19,7 @@ class VillageController {
 
     // Upsert pour éviter doublon (tenantId + secteurId + name)
     const created = await prisma.village.upsert({
-      where: { tenantId_secteurId_name: { tenantId, secteurId, name } },
+      where: { name_secteurId_tenantId: { tenantId, secteurId, name } },
       update: {},
       create: { tenantId, secteurId, name },
     });

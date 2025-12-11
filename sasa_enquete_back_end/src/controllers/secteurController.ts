@@ -19,7 +19,9 @@ class SecteurController {
 
     // Upsert pour éviter les doublons (tenantId + departementId + name)
     const created = await prisma.secteur.upsert({
-      where: { tenantId_departementId_name: { tenantId, departementId, name } },
+      where: {
+       name_departementId_tenantId : { tenantId, departementId, name },
+      },
       update: {},
       create: { tenantId, departementId, name },
     });

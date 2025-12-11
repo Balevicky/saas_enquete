@@ -1,16 +1,17 @@
 import { Request, Response } from "express";
 import prisma from "../prisma";
-import { nanoid } from "nanoid";
+// import { nanoid } from "nanoid";
 import bcrypt from "bcryptjs";
 import { buildPagination, buildSearchFilter } from "../utils/pagination";
+import { generateId } from "../utils/generateId";
 
 class InviteController {
   static async create(req: Request, res: Response) {
     const tenantId = (req as any).tenantId;
     const { email, role } = req.body;
-
-    const token = nanoid(32);
-
+    // generateId;
+    // const token = nanoid(32);
+    const token = await generateId(32);
     const invite = await prisma.invite.create({
       data: { email, role: role || "USER", tenantId, token },
     });

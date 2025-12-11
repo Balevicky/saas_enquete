@@ -1,5 +1,7 @@
+// src/routes/region.routes.ts
 import { Router } from "express";
 import { authMiddleware } from "../middlewares/authMiddleware";
+import { tenantFromSlug } from "../middlewares/tenantMiddleware";
 import RegionController from "../controllers/regionController";
 import { validate } from "../middlewares/validateMiddleware";
 import {
@@ -8,21 +10,43 @@ import {
 } from "../validations/geoValidation";
 
 const router = Router();
-// Régions
+
+// Toutes les routes incluent maintenant /t/:slug
 router.post(
-  "/regions",
-  authMiddleware,
+  "/t/:slug/regions",
+  tenantFromSlug, // extraire tenantId depuis slug
+  authMiddleware, // vérifier JWT + tenant
   validate(createRegionSchema),
   RegionController.create
 );
-router.get("/regions", authMiddleware, RegionController.list);
-router.get("/regions/:id", authMiddleware, RegionController.get);
+
+router.get(
+  "/t/:slug/regions",
+  tenantFromSlug,
+  authMiddleware,
+  RegionController.list
+);
+
+router.get(
+  "/t/:slug/regions/:id",
+  tenantFromSlug,
+  authMiddleware,
+  RegionController.get
+);
+
 router.put(
-  "/regions/:id",
+  "/t/:slug/regions/:id",
+  tenantFromSlug,
   authMiddleware,
   validate(updateRegionSchema),
   RegionController.update
 );
-router.delete("/regions/:id", authMiddleware, RegionController.remove);
+
+router.delete(
+  "/t/:slug/regions/:id",
+  tenantFromSlug,
+  authMiddleware,
+  RegionController.remove
+);
 
 export default router;

@@ -1,5 +1,7 @@
+// src/routes/secteur.routes.ts
 import { Router } from "express";
 import { authMiddleware } from "../middlewares/authMiddleware";
+import { tenantFromSlug } from "../middlewares/tenantMiddleware";
 import { validate } from "../middlewares/validateMiddleware";
 import SecteurController from "../controllers/secteurController";
 import {
@@ -9,22 +11,46 @@ import {
 
 const router = Router();
 
-// Secteurs
+// POST /t/:slug/secteurs
 router.post(
-  "/secteurs",
-  authMiddleware,
+  "/t/:slug/secteurs",
+  tenantFromSlug, // injecte tenantId
+  authMiddleware, // vérifie JWT + tenant
   validate(createSecteurSchema),
   SecteurController.create
 );
-router.get("/secteurs", authMiddleware, SecteurController.list);
-router.get("/secteurs/:id", authMiddleware, SecteurController.get);
 
+// GET /t/:slug/secteurs
+router.get(
+  "/t/:slug/secteurs",
+  tenantFromSlug,
+  authMiddleware,
+  SecteurController.list
+);
+
+// GET /t/:slug/secteurs/:id
+router.get(
+  "/t/:slug/secteurs/:id",
+  tenantFromSlug,
+  authMiddleware,
+  SecteurController.get
+);
+
+// PUT /t/:slug/secteurs/:id
 router.put(
-  "/secteurs/:id",
+  "/t/:slug/secteurs/:id",
+  tenantFromSlug,
   authMiddleware,
   validate(updateSecteurSchema),
   SecteurController.update
 );
-router.delete("/secteurs/:id", authMiddleware, SecteurController.remove);
+
+// DELETE /t/:slug/secteurs/:id
+router.delete(
+  "/t/:slug/secteurs/:id",
+  tenantFromSlug,
+  authMiddleware,
+  SecteurController.remove
+);
 
 export default router;

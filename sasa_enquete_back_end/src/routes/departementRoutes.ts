@@ -1,8 +1,9 @@
+// src/routes/departement.routes.ts
 import { Router } from "express";
 import { authMiddleware } from "../middlewares/authMiddleware";
+import { tenantFromSlug } from "../middlewares/tenantMiddleware";
 import { validate } from "../middlewares/validateMiddleware";
 import DepartementController from "../controllers/departementController";
-
 import {
   createDepartementSchema,
   updateDepartementSchema,
@@ -10,23 +11,44 @@ import {
 
 const router = Router();
 
-// Départements
+// POST /t/:slug/departements
 router.post(
-  "/departements",
-  authMiddleware,
+  "/t/:slug/departements",
+  tenantFromSlug, // injecte tenantId
+  authMiddleware, // vérifie JWT + tenant
   validate(createDepartementSchema),
   DepartementController.create
 );
-router.get("/departements", authMiddleware, DepartementController.list);
-router.get("/departements/:id", authMiddleware, DepartementController.get);
+
+// GET /t/:slug/departements
+router.get(
+  "/t/:slug/departements",
+  tenantFromSlug,
+  authMiddleware,
+  DepartementController.list
+);
+
+// GET /t/:slug/departements/:id
+router.get(
+  "/t/:slug/departements/:id",
+  tenantFromSlug,
+  authMiddleware,
+  DepartementController.get
+);
+
+// PUT /t/:slug/departements/:id
 router.put(
-  "/departements/:id",
+  "/t/:slug/departements/:id",
+  tenantFromSlug,
   authMiddleware,
   validate(updateDepartementSchema),
   DepartementController.update
 );
+
+// DELETE /t/:slug/departements/:id
 router.delete(
-  "/departements/:id",
+  "/t/:slug/departements/:id",
+  tenantFromSlug,
   authMiddleware,
   DepartementController.remove
 );

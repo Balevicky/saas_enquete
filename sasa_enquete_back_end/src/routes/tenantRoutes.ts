@@ -1,38 +1,36 @@
-// src/routes/tenant.routes.ts
-// import { Router } from "express";
-// import { authMiddleware } from "../middlewares/authMiddleware";
-// import TenantController from "../controllers/tenantController";
-
-// const router = Router();
-// router.get("/settings", authMiddleware, TenantController.getSettings);
-// router.put("/settings", authMiddleware, TenantController.updateSettings);
-
-// export default router;
 import { Router } from "express";
 import { authMiddleware } from "../middlewares/authMiddleware";
+import { tenantFromSlug } from "../middlewares/tenantMiddleware";
 import TenantController from "../controllers/tenantController";
 import { validate } from "../middlewares/validateMiddleware";
-import { z } from "zod";
 import {
   createTenantSchema,
   updateSettingsSchema,
 } from "../validations/tenantValidation";
+
 const router = Router();
 
-// GET tenant settings (requires auth)
-router.get("/settings", authMiddleware, TenantController.getSettings);
+// GET settings
+router.get(
+  "/t/:slug/settings",
+  tenantFromSlug,
+  authMiddleware,
+  TenantController.getSettings
+);
 
-// Update settings (requires auth & appropriate role)
+// UPDATE settings
 router.put(
-  "/settings",
+  "/t/:slug/settings",
+  tenantFromSlug,
   authMiddleware,
   validate(updateSettingsSchema),
   TenantController.updateSettings
 );
 
-// Admin: create a tenant (rare, owner-level operation) - optionally protected by an admin API key in prod
+// ADMIN: CREATE tenant
 router.post(
-  "/create",
+  "/t/:slug/create",
+  tenantFromSlug,
   authMiddleware,
   validate(createTenantSchema),
   TenantController.createTenant

@@ -11,7 +11,8 @@ class DepartementController {
     // Vérifier que la région existe et appartient au tenant
     const region = await prisma.region.findUnique({
       where: {
-        tenantId_name: {
+        // tenantId_name: {
+        name_tenantId: {
           tenantId,
           name:
             (
@@ -27,7 +28,14 @@ class DepartementController {
 
     // Upsert pour éviter les doublons
     const created = await prisma.departement.upsert({
-      where: { tenantId_regionId_name: { tenantId, regionId, name } },
+      where: {
+        // tenantId_regionId_name: {
+        name_regionId_tenantId: {
+          tenantId,
+          regionId,
+          name,
+        },
+      },
       update: {},
       create: { tenantId, regionId, name },
     });

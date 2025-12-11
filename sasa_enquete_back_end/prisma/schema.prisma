@@ -65,7 +65,7 @@ model Region {
   tenant       Tenant        @relation(fields: [tenantId], references: [id])
   createdAt    DateTime      @default(now())
 
-  @@unique([tenantId, name]) // 🔥
+  @@unique([name, tenantId], name: "name_tenantId") // 🔥
 }
 
 model Departement {
@@ -78,7 +78,7 @@ model Departement {
   tenant    Tenant    @relation(fields: [tenantId], references: [id])
   createdAt DateTime  @default(now())
 
-  @@unique([tenantId, regionId, name])
+  @@unique([name, regionId, tenantId], name: "name_regionId_tenantId")
 }
 
 model Secteur {
@@ -92,7 +92,7 @@ model Secteur {
 
   createdAt DateTime @default(now())
 
-  @@unique([tenantId, departementId, name])
+  @@unique([name, departementId, tenantId], name: "name_departementId_tenantId")
 }
 
 model Village {
@@ -104,7 +104,7 @@ model Village {
   tenant    Tenant   @relation(fields: [tenantId], references: [id])
   createdAt DateTime @default(now())
 
-  @@unique([tenantId, secteurId, name])
+  @@unique([name, secteurId, tenantId], name: "name_secteurId_tenantId")
 }
 
 model Survey {
@@ -134,6 +134,7 @@ model Invite {
   accepted  Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  user      User?    @relation(fields: [email], references: [email])
+  user      User?    @relation(fields: [userId], references: [id])
+  userId    String?  // ⚠️ à la place de email
   tenant    Tenant   @relation(fields: [tenantId], references: [id])
 }

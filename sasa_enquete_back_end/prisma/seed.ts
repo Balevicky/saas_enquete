@@ -41,14 +41,21 @@ async function main() {
 
   // 3️⃣ Régions + Départements + Secteurs + Villages (exemple)
   const region = await prisma.region.upsert({
-    where: { tenantId_name: { tenantId: tenant.id, name: "Region 1" } },
+    where: {
+      // tenantId_name: {
+      name_tenantId: {
+        tenantId: tenant.id,
+        name: "Region 1",
+      },
+    },
     update: {},
     create: { name: "Region 1", tenantId: tenant.id },
   });
 
   const departement = await prisma.departement.upsert({
     where: {
-      tenantId_regionId_name: {
+      // tenantId_regionId_name: {
+      name_regionId_tenantId: {
         tenantId: tenant.id,
         regionId: region.id,
         name: "Departement 1",
@@ -64,7 +71,8 @@ async function main() {
 
   const secteur = await prisma.secteur.upsert({
     where: {
-      tenantId_departementId_name: {
+      // tenantId_departementId_name: {
+      name_departementId_tenantId: {
         tenantId: tenant.id,
         departementId: departement.id,
         name: "Secteur 1",
@@ -77,22 +85,22 @@ async function main() {
       name: "Secteur 1",
     },
   });
-await prisma.village.upsert({
-  where: {
-    tenantId_secteurId_name: {
+  await prisma.village.upsert({
+    where: {
+      // tenantId_secteurId_name: {
+      name_secteurId_tenantId: {
+        tenantId: tenant.id,
+        secteurId: secteur.id,
+        name: "Village 1",
+      },
+    },
+    update: {},
+    create: {
       tenantId: tenant.id,
       secteurId: secteur.id,
       name: "Village 1",
     },
-  },
-  update: {},
-  create: {
-    tenantId: tenant.id,
-    secteurId: secteur.id,
-    name: "Village 1",
-  },
-});
-
+  });
 
   // 4️⃣ Invitations exemples
   await prisma.invite.upsert({
@@ -103,6 +111,7 @@ await prisma.village.upsert({
       tenantId: tenant.id,
       role: "USER",
       token: "invite-token-1",
+      userId: null, // pas encore créé
     },
   });
 

@@ -10,6 +10,8 @@
 import { Router } from "express";
 import AuthController from "../controllers/authController";
 import { validate } from "../middlewares/validateMiddleware";
+import { tenantFromSlug } from "../middlewares/tenantMiddleware";
+
 import {
   loginSchema,
   registerSchema,
@@ -20,25 +22,40 @@ import {
 
 const router = Router();
 
-// Create a new tenant + owner (public)
+// Create a new tenant + owner (does NOT need tenantFromSlug)
 router.post(
   "/signup",
   validate(signupTenantSchema),
   AuthController.signupTenant
 );
 
-// Register a user inside the current tenant (requires tenant extracted)
-router.post("/register", validate(registerSchema), AuthController.register);
-
-router.post("/login", validate(loginSchema), AuthController.login);
+// ↓↓↓ All below require the tenant slug in the URL ↓↓↓
 
 router.post(
-  "/forgot-password",
+  "/t/:slug/register",
+  tenantFromSlug,
+  validate(registerSchema),
+  AuthController.register
+);
+
+router.post(
+  // "/t/:slug/login",
+  "/login",
+  tenantFromSlug,
+  validate(loginSchema),
+  AuthController.login
+);
+
+router.post(
+  "/t/:slug/forgot-password",
+  tenantFromSlug,
   validate(forgotPasswordSchema),
   AuthController.forgotPassword
 );
+
 router.post(
-  "/reset-password",
+  "/t/:slug/reset-password",
+  tenantFromSlug,
   validate(resetPasswordSchema),
   AuthController.resetPassword
 );

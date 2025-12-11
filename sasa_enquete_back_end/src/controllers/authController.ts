@@ -2,8 +2,10 @@ import { Request, Response } from "express";
 import prisma from "../prisma";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { nanoid } from "nanoid";
+
 import type { Role } from "@prisma/client";
+import { error } from "console";
+// import { generateId } from "../utils/generateId";
 
 const JWT_SECRET = process.env.JWT_SECRET || "change_me";
 const JWT_EXPIRES = process.env.JWT_EXPIRES || "7d";
@@ -52,6 +54,8 @@ class AuthController {
     res: Response
   ) {
     try {
+      // const id = await generateId();
+      // const token = await generateId(32);
       const {
         tenantName,
         tenantSlug,
@@ -107,7 +111,8 @@ class AuthController {
   // Register into existing tenant (tenant must be extracted by middleware)
   static async register(req: TypedRequestBody<RegisterBody>, res: Response) {
     try {
-      const tenantId = req.tenantId;
+      // const tenantId = req.tenantId;
+      const tenantId = (req as any).tenantId;
       if (!tenantId) return res.status(400).json({ error: "Tenant missing" });
 
       const { email, password, fullName } = req.body;
@@ -130,6 +135,10 @@ class AuthController {
       const token = jwt.sign(payload, JWT_SECRET, {
         expiresIn: JWT_EXPIRES as jwt.SignOptions["expiresIn"],
       });
+      console.log({
+        token,
+        user: { id: user.id, email: user.email, fullName: user.fullName },
+      });
 
       return res.status(201).json({
         token,
@@ -144,8 +153,14 @@ class AuthController {
   static async login(req: TypedRequestBody<LoginBody>, res: Response) {
     try {
       const { email, password } = req.body;
-      const tenantId = req.tenantId;
-      if (!tenantId) return res.status(400).json({ error: "Tenant missing" });
+      // const tenantId = req.tenantId;
+      const tenantId = (req as any).tenantId;
+      console.log("tenantId=", tenantId);
+
+      if (!tenantId)
+        return res.status(400).json({
+          error: "Tenant missing",
+        });
 
       // Select only the fields we need to keep typings narrow and avoid leaking password unnecessarily
       const user = await prisma.user.findUnique({
@@ -203,7 +218,6 @@ class AuthController {
       const user = await prisma.user.findUnique({ where: { email } });
       if (!user) return res.json({ ok: true }); // don't reveal existence
 
-      const token = nanoid(32);
       // store token temporarily (in production use a reset table with expiry)
       // We'll create a simple userReset table in DB in production. For now demonstrate using "settings" or similar is unsafe.
       await prisma.user.update({
