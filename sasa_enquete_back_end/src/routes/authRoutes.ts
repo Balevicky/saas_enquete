@@ -24,7 +24,7 @@ const router = Router();
 
 // Create a new tenant + owner (does NOT need tenantFromSlug)
 router.post(
-  "/signup",
+  "/auth/signup",
   validate(signupTenantSchema),
   AuthController.signupTenant
 );
@@ -32,29 +32,29 @@ router.post(
 // ↓↓↓ All below require the tenant slug in the URL ↓↓↓
 
 router.post(
-  "/t/:slug/register",
+  "/t/:slug/auth/register",
   tenantFromSlug,
   validate(registerSchema),
   AuthController.register
 );
 
 router.post(
-  // "/t/:slug/login",
-  "/login",
+  "/t/:slug/auth/login",
+  // "/login",
   tenantFromSlug,
   validate(loginSchema),
   AuthController.login
 );
 
 router.post(
-  "/t/:slug/forgot-password",
+  "/t/:slug/auth/forgot-password",
   tenantFromSlug,
   validate(forgotPasswordSchema),
   AuthController.forgotPassword
 );
 
 router.post(
-  "/t/:slug/reset-password",
+  "/t/:slug/auth/reset-password",
   tenantFromSlug,
   validate(resetPasswordSchema),
   AuthController.resetPassword

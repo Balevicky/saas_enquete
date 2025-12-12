@@ -1,3 +1,90 @@
+// ==================================================
+// import React, {
+//   createContext,
+//   useContext,
+//   useState,
+//   ReactNode,
+//   useEffect,
+// } from "react";
+// import authService from "../services/authService";
+// import { useNavigate, useParams } from "react-router-dom";
+
+// // 🔹 Structure des données fournies par le contexte d’authentification
+// type AuthContextType = {
+//   token: string | null;
+//   user: any | null;
+//   tenantSlug: string | null;
+//   setTenantSlug: (slug: string) => void; // 🔹 setter pour workspace switcher
+//   login: (email: string, password: string, slug: string) => Promise<void>;
+//   logout: () => void;
+// };
+
+// // 🔹 Création du contexte
+// const AuthContext = createContext<AuthContextType>({} as AuthContextType);
+
+// export const AuthProvider = ({ children }: { children: ReactNode }) => {
+//   const navigate = useNavigate();
+//   const params = useParams<{ tenantSlug: string }>();
+
+//   const urlSlug = params.tenantSlug || null;
+//   const storedSlug = localStorage.getItem("tenantSlug");
+//   const [tenantSlug, setTenantSlugState] = useState<string | null>(
+//     urlSlug || storedSlug || null
+//   );
+
+//   const [token, setToken] = useState<string | null>(
+//     localStorage.getItem("token")
+//   );
+//   const [user, setUser] = useState<any | null>(null);
+
+//   const setTenantSlug = (slug: string) => {
+//     setTenantSlugState(slug);
+//     localStorage.setItem("tenantSlug", slug);
+//   };
+
+//   useEffect(() => {
+//     if (token) setUser(null);
+//   }, [token]);
+
+//   const login = async (email: string, password: string, slug: string) => {
+//     const effectiveSlug = tenantSlug || slug;
+//     if (!effectiveSlug) throw new Error("Tenant missing");
+
+//     const res = await authService.login(effectiveSlug, email, password);
+
+//     localStorage.setItem("token", res.token);
+//     setToken(res.token);
+
+//     setUser(res.user);
+//     setTenantSlug(effectiveSlug);
+
+//     navigate(`/t/${effectiveSlug}/dashboard`);
+//   };
+
+//   const logout = () => {
+//     localStorage.removeItem("token");
+//     localStorage.removeItem("tenantSlug");
+
+//     setToken(null);
+//     setUser(null);
+//     setTenantSlugState(null);
+
+//     navigate("/login");
+//   };
+
+//   return (
+//     <AuthContext.Provider
+//       value={{ token, user, tenantSlug, setTenantSlug, login, logout }}
+//     >
+//       {children}
+//     </AuthContext.Provider>
+//   );
+// };
+
+// export const useAuth = () => useContext(AuthContext);
+// export default AuthContext;
+
+// =====================================
 import React, {
   createContext,
   useContext,
@@ -5,104 +92,74 @@ import React, {
   ReactNode,
   useEffect,
 } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import authService from "../services/authService";
-import { useNavigate, useParams } from "react-router-dom";
 
-// 🔹 Structure des données fournies par le contexte d’authentification
 type AuthContextType = {
-  token: string | null; // JWT stocké après login / signup
-  user: any | null; // Informations sur l'utilisateur connecté
-  tenantSlug: string | null; // Slug du tenant actuel
-  login: (email: string, password: string) => Promise<void>; // fonction login
-  logout: () => void; // fonction logout
+  token: string | null;
+  user: any | null;
+  tenantSlug: string | null;
+  login: (email: string, password: string, slug: string) => Promise<void>;
+  logout: () => void;
 };
 
-// 🔹 On crée un contexte vide à la base
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
-// 🔹 Ce provider englobe toute l'application (dans App.tsx)
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const navigate = useNavigate();
+  const { tenantSlug: urlSlug } = useParams<{ tenantSlug: string }>();
 
-  // On récupère le paramètre tenantSlug dans l'URL si présent
-  const params = useParams<{ tenantSlug?: string }>();
-
-  /**
-   * 🎯 Gestion intelligente du tenantSlug :
-   *
-   * 1️⃣ Priorité à l'URL : /t/:tenantSlug/...
-   * 2️⃣ Sinon : récupérer le slug stocké dans localStorage
-   *     (nécessaire juste après le signup)
-   * 3️⃣ Sinon : tenantSlug = null (cas page /signup)
-   */
-
-  const urlSlug = params.tenantSlug || null;
-  const storedSlug = localStorage.getItem("tenantSlug");
-  console.log("storedSlug", storedSlug);
-  console.log("urlSlug", urlSlug);
-
-  const tenantSlug = urlSlug || storedSlug || null;
-  console.log("tenanSlug", tenantSlug);
-
-  // 🔹 Token JWT initialisé depuis localStorage (persistant)
   const [token, setToken] = useState<string | null>(
     localStorage.getItem("token")
   );
-
-  // 🔹 Infos utilisateur
   const [user, setUser] = useState<any | null>(null);
 
   /**
-   * 🧠 Quand le token change, on peut recharger le profil utilisateur.
-   * Pour l'instant tu mets user à null (à remplacer par un fetch du profil si besoin)
+   * Détection propre du tenantSlug :
+   * - Priorité à : /t/:tenantSlug/...
+   * - Sinon : stockage local
    */
+  const [tenantSlug, setTenantSlug] = useState<string | null>(() => {
+    return urlSlug || localStorage.getItem("tenantSlug") || null;
+  });
+
   useEffect(() => {
-    if (token) {
-      setUser(null);
+    if (urlSlug && urlSlug !== tenantSlug) {
+      // Si l’URL change, mettre à jour le slug global
+      setTenantSlug(urlSlug);
+      localStorage.setItem("tenantSlug", urlSlug);
     }
-  }, [token]);
+  }, [urlSlug]);
 
   /**
-   * 🔐 Fonction LOGIN multi-tenant
-   *
-   * - Vérifie que le tenantSlug existe (URL ou localStorage)
-   * - Envoie la requête au backend
-   * - Sauvegarde token + slug
-   * - Redirige vers dashboard
+   * LOGIN MULTI-TENANT
+   * slug → prioritaire (fournit par Login.tsx)
    */
-  const login = async (email: string, password: string) => {
-    // Si aucun tenant n'a pu être déterminé → erreur
-    console.log("tenanSlug dans login", tenantSlug);
-    if (!tenantSlug) throw new Error("Tenant missing in URL or storage");
+  const login = async (email: string, password: string, slug: string) => {
+    if (!slug) throw new Error("Tenant slug is required");
 
-    // Appel API vers /t/:tenantSlug/auth/login
-    const res = await authService.login(tenantSlug, email, password);
+    // Appel backend
+    const res = await authService.login(slug, email, password);
 
-    // Sauvegarde du token et du slug pour usage futur
+    // Sauvegarde persistante
     localStorage.setItem("token", res.token);
-    localStorage.setItem("tenantSlug", tenantSlug);
+    localStorage.setItem("tenantSlug", slug);
 
-    // Mise à jour du state React
     setToken(res.token);
     setUser(res.user);
+    setTenantSlug(slug);
 
-    // Redirection après login
-    navigate(`/t/${tenantSlug}/dashboard`);
+    navigate(`/t/${slug}/dashboard`);
   };
 
-  /**
-   * 🚪 Fonction LOGOUT
-   *
-   * - Supprime token + slug du localStorage
-   * - Réinitialise l'état local
-   * - Redirige vers /login
-   */
+  /** LOGOUT **/
   const logout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("tenantSlug");
 
     setToken(null);
     setUser(null);
+    setTenantSlug(null);
 
     navigate("/login");
   };
@@ -122,7 +179,5 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
-// 🔹 Hook personnalisé pour importer facilement le contexte dans le reste du front
 export const useAuth = () => useContext(AuthContext);
-
 export default AuthContext;

@@ -8,7 +8,6 @@ import {
 } from "react-router-dom";
 
 import Dashboard from "./pages/Dashboard";
-import GeoManagement from "./pages/GeoManagement";
 import InviteListPage from "./pages/InviteListPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
@@ -16,6 +15,11 @@ import SignupTenantPage from "./pages/SignupTenantPage";
 
 import AppNavbar from "./components/common/Navbar";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
+// import DepartementList from "./components/geo/DepartementList";
+import RegionPage from "./pages/RegionPage";
+import SectorPage from "./pages/SectorPage";
+import VillagePage from "./pages/VallagePage";
+import DepartementPage from "./pages/DepartementPage";
 
 // ----------------------
 // Route privée tenant-aware
@@ -81,14 +85,25 @@ const App: React.FC = () => (
           element={<TenantRoute element={<Dashboard />} />}
         />
         <Route
-          path="/t/:tenantSlug/geo"
-          element={<TenantRoute element={<GeoManagement />} />}
+          path="/t/:tenantSlug/region"
+          element={<TenantRoute element={<RegionPage />} />}
+        />
+        <Route
+          path="/t/:tenantSlug/departement"
+          element={<TenantRoute element={<DepartementPage />} />}
+        />
+        <Route
+          path="/t/:tenantSlug/secteur"
+          element={<TenantRoute element={<SectorPage />} />}
+        />
+        <Route
+          path="/t/:tenantSlug/village"
+          element={<TenantRoute element={<VillagePage />} />}
         />
         <Route
           path="/t/:tenantSlug/invite"
           element={<TenantRoute element={<InviteListPage />} />}
         />
-
         {/* Default redirect */}
         <Route path="/" element={<Navigate to="/login" replace />} />
       </Routes>

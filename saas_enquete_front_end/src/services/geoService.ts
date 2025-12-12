@@ -4,7 +4,9 @@ const geoService = {
   // REGIONS
   createRegion: (tenantSlug: string, name: string) =>
     api.post(`/t/${tenantSlug}/regions`, { name }),
-  listRegions: (tenantSlug: string) => api.get(`/t/${tenantSlug}/regions`),
+  // listRegions: (tenantSlug: string) => api.get(`/t/${tenantSlug}/regions`),
+  listRegions: (tenantSlug: string, query: any = {}) =>
+    api.get(`/t/${tenantSlug}/regions`, { params: query }),
   updateRegion: (tenantSlug: string, id: string, data: any) =>
     api.put(`/t/${tenantSlug}/regions/${id}`, data),
   deleteRegion: (tenantSlug: string, id: string) =>
