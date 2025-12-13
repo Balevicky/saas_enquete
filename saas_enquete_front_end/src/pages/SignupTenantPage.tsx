@@ -69,7 +69,7 @@ const SignupTenantPage: React.FC = () => {
 
   return (
     <Container
-      className="d-flex align-items-center justify-content-center"
+      className="d-flex align-items-center justify-content-center mt-4 "
       style={{ minHeight: "100vh" }}
     >
       <Row className="w-100 justify-content-center">

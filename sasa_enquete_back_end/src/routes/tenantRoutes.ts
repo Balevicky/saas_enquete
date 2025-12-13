@@ -1,3 +1,4 @@
+// src/routes/tenantRoute.ts
 import { Router } from "express";
 import { authMiddleware } from "../middlewares/authMiddleware";
 import { tenantFromSlug } from "../middlewares/tenantMiddleware";
@@ -5,12 +6,17 @@ import TenantController from "../controllers/tenantController";
 import { validate } from "../middlewares/validateMiddleware";
 import {
   createTenantSchema,
-  updateSettingsSchema,
+  updateGeneralSchema,
+  updateBrandingSchema,
 } from "../validations/tenantValidation";
+
+import { requireRole } from "../middlewares/roleMiddleware"; // nouveau middleware RBAC
 
 const router = Router();
 
-// GET settings
+// ======================
+// GET tenant settings
+// ======================
 router.get(
   "/t/:slug/settings",
   tenantFromSlug,
@@ -18,20 +24,40 @@ router.get(
   TenantController.getSettings
 );
 
-// UPDATE settings
+// ======================
+// UPDATE General Settings
+// only OWNER and ADMIN
+// ======================
 router.put(
-  "/t/:slug/settings",
+  "/t/:slug/settings/general",
   tenantFromSlug,
   authMiddleware,
-  validate(updateSettingsSchema),
-  TenantController.updateSettings
+  requireRole(["OWNER", "ADMIN"]),
+  validate(updateGeneralSchema),
+  TenantController.updateGeneral
 );
 
+// ======================
+// UPDATE Branding Settings
+// only OWNER and ADMIN
+// ======================
+router.put(
+  "/t/:slug/settings/branding",
+  tenantFromSlug,
+  authMiddleware,
+  requireRole(["OWNER", "ADMIN"]),
+  validate(updateBrandingSchema),
+  TenantController.updateBranding
+);
+
+// ======================
 // ADMIN: CREATE tenant
+// ======================
 router.post(
   "/t/:slug/create",
   tenantFromSlug,
   authMiddleware,
+  requireRole(["OWNER", "ADMIN"]),
   validate(createTenantSchema),
   TenantController.createTenant
 );

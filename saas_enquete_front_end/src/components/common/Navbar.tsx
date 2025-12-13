@@ -266,6 +266,9 @@ const AppNavbar: React.FC = () => {
                 <NavDropdown.Item as={Link} to={path("/settings")}>
                   Settings
                 </NavDropdown.Item>
+                <NavDropdown.Item as={Link} to={path("/register")}>
+                  Registrer
+                </NavDropdown.Item>
 
                 <NavDropdown.Divider />
 

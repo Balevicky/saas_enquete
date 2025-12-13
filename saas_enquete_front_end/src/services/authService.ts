@@ -45,6 +45,33 @@ const authService = {
     localStorage.setItem("tenantSlug", res.data.tenant.slug);
     return res.data;
   },
+  // =======================
+  /**
+   * 🔐 Forgot password
+   * - Envoie l’email au backend
+   * - Le backend génère un token et envoie un lien par email
+   * - Aucune info n’est révélée si l’email n’existe pas
+   */
+  forgotPassword: async (tenantSlug: string, email: string) => {
+    return axios.post(`/t/${tenantSlug}/auth/forgot-password`, { email });
+  },
+
+  /**
+   * 🔁 Reset password
+   * - Reçoit le token depuis l’URL
+   * - Envoie le nouveau mot de passe au backend
+   */
+  resetPassword: async (
+    tenantSlug: string,
+    token: string,
+    password: string
+  ) => {
+    return axios.post(`/t/${tenantSlug}/auth/reset-password`, {
+      token,
+      password,
+    });
+  },
+  // =======================
 };
 
 export default authService;

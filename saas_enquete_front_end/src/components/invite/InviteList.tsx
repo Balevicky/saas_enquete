@@ -109,6 +109,10 @@ const InviteList: React.FC = () => {
               >
                 <option value="USER">User</option>
                 <option value="ADMIN">Admin</option>
+                <option value="EDITOR">Editor</option>
+                <option value="ENQUETEUR">INVESTIGATOR</option>
+                <option value="SUPERVISEUR">SUPERVISOR</option>
+                <option value="VIEWER">Viewer</option>
               </Form.Select>
             </div>
 

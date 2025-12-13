@@ -49,7 +49,7 @@ const Login: React.FC = () => {
   return (
     <Container
       className="d-flex align-items-center justify-content-center"
-      style={{ minHeight: "100vh" }}
+      style={{ minHeight: "90vh" }}
     >
       <Row className="w-100 justify-content-center">
         <Col xs={12} md={6} lg={5}>
@@ -103,7 +103,16 @@ const Login: React.FC = () => {
                   Log in
                 </Button>
               </Form>
+              {/* ====================== */}
+              <div className="text-center mt-3">
+                <small>
+                  <a href={`/t/${finalSlug}/forgot-password`}>
+                    Forgot your password?
+                  </a>
+                </small>
+              </div>
 
+              {/* ====================== */}
               <div className="text-center mt-3">
                 <small className="text-muted">
                   Can't access your workspace? <a href="/signup">Create one</a>

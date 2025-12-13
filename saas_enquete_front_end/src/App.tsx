@@ -20,6 +20,10 @@ import RegionPage from "./pages/RegionPage";
 import SectorPage from "./pages/SectorPage";
 import VillagePage from "./pages/VallagePage";
 import DepartementPage from "./pages/DepartementPage";
+// import ResetPassword from "./components/auth/ResetPassword";
+// import ForgotPassword from "./components/auth/ForgotPassword";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 
 // ----------------------
 // Route privée tenant-aware
@@ -72,13 +76,19 @@ const App: React.FC = () => (
         {/* Routes publiques globales */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupTenantPage />} />
-
+        // Auth routes publiques
+        <Route
+          path="/t/:tenantSlug/forgot-password"
+          element={<ForgotPasswordPage />}
+        />
+        <Route
+          path="/t/:tenantSlug/reset-password"
+          element={<ResetPasswordPage />}
+        />
         {/* Route login tenant-aware */}
         <Route path="/t/:tenantSlug/login" element={<LoginPage />} />
-
         {/* Register tenant-aware */}
         <Route path="/t/:tenantSlug/register" element={<RegisterPage />} />
-
         {/* Routes multi-tenant protégées */}
         <Route
           path="/t/:tenantSlug/dashboard"

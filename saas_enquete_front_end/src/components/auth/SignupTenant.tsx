@@ -31,7 +31,7 @@ const SignupTenant: React.FC = () => {
   };
 
   return (
-    <Container>
+    <Container style={{ minHeight: "90vh" }}>
       <Row className="justify-content-md-center">
         <Col md={6}>
           <h2 className="mt-5">Create your tenant</h2>

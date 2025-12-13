@@ -21,7 +21,7 @@ model Tenant {
   departements Departement[]
   secteurs     Secteur[]
   villages     Village[]
-
+  passwordResetTokens   PasswordResetToken[]
   createdAt DateTime @default(now())
 }
 
@@ -32,6 +32,7 @@ model User {
   fullName  String?
   tenants   UserTenant[]
   invites   Invite[]
+  passwordResetTokens   PasswordResetToken[]
   createdAt DateTime     @default(now())
 }
 
@@ -138,3 +139,19 @@ model Invite {
   userId    String?  // ⚠️ à la place de email
   tenant    Tenant   @relation(fields: [tenantId], references: [id])
 }
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+   tenantId  String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([userId, tenantId])
+
+  createdAt DateTime @default(now())
+}
+
