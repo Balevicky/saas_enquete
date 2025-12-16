@@ -22,6 +22,11 @@ export function authMiddleware(
     }
 
     (req as any).user = payload;
+    (req as any).userId = payload.userId;
+    (req as any).tenantId = payload.tenantId;
+    (req as any).userRole = payload.role; // ✅ LIGNE MANQUANTE
+    console.log("JWT tenant dans authmidle:", (req as any).user.tenantId);
+    console.log("URL tenant dans authmidle:", (req as any).params.slug);
     next();
   } catch (err) {
     return res.status(401).json({ error: "Invalid token" });

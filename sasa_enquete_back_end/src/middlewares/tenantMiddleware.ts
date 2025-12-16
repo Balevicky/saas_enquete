@@ -9,7 +9,8 @@ export async function tenantFromSlug(
   try {
     const slug = req.params.slug;
     console.log("slug", slug);
-
+    // console.log("JWT tenant:", (req as any).user.tenantId);
+    console.log("URL tenant dans tenantMiddle:", (req as any).params.slug);
     if (!slug) return res.status(400).json({ error: "Tenant slug missing" });
 
     const tenant = await prisma.tenant.findUnique({

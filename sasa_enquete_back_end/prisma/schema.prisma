@@ -8,32 +8,37 @@ datasource db {
 }
 
 model Tenant {
-  id           String        @id @default(cuid())
-  name         String
-  slug         String        @unique
-  logoUrl      String?
-  settings     Json?
-  invites      Invite[]
-  surveys      Survey[]
-  users        UserTenant[]
+  id                  String               @id @default(cuid())
+  name                String
+  slug                String               @unique
+  logoUrl             String?
+  settings            Json?
+  invites             Invite[]
+  surveys             Survey[]
+  users               UserTenant[]
   // Relations inverses obligatoires
-  regions      Region[]
-  departements Departement[]
-  secteurs     Secteur[]
-  villages     Village[]
-  passwordResetTokens   PasswordResetToken[]
-  createdAt DateTime @default(now())
+  regions             Region[]
+  departements        Departement[]
+  secteurs            Secteur[]
+  villages            Village[]
+  responses           Response[]
+  respondents         Respondent[]
+  questions           Question[]
+  surveyResponses     SurveyResponse[]
+  passwordResetTokens PasswordResetToken[]
+  createdAt           DateTime             @default(now())
 }
 
 model User {
-  id        String       @id @default(cuid())
-  email     String       @unique
-  password  String
-  fullName  String?
-  tenants   UserTenant[]
-  invites   Invite[]
-  passwordResetTokens   PasswordResetToken[]
-  createdAt DateTime     @default(now())
+  id                  String               @id @default(cuid())
+  email               String               @unique
+  password            String
+  fullName            String?
+  tenants             UserTenant[]
+  invites             Invite[]
+  passwordResetTokens PasswordResetToken[]
+  createdAt           DateTime             @default(now())
+  createdSurveys      Survey[]             @relation("SurveyCreator")
 }
 
 model UserTenant {
@@ -97,33 +102,130 @@ model Secteur {
 }
 
 model Village {
-  id        String   @id @default(cuid())
-  tenantId  String
-  secteurId String
-  name      String
-  secteur   Secteur  @relation(fields: [secteurId], references: [id])
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
-  createdAt DateTime @default(now())
+  id          String       @id @default(cuid())
+  tenantId    String
+  secteurId   String
+  name        String
+  secteur     Secteur      @relation(fields: [secteurId], references: [id])
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
+  createdAt   DateTime     @default(now())
+  respondents Respondent[]
 
   @@unique([name, secteurId, tenantId], name: "name_secteurId_tenantId")
 }
 
 model Survey {
-  id        String     @id @default(cuid())
-  tenantId  String
-  title     String
-  json      Json
-  status    String
+  id          String           @id @default(cuid())
+  title       String
+  json        Json
+  tenantId    String
+  createdBy   String
+  createdAt   DateTime         @default(now())
+  respondents Respondent[]
+  questions   Question[]
+  creator     User             @relation("SurveyCreator", fields: [createdBy], references: [id])
+  tenant      Tenant           @relation(fields: [tenantId], references: [id])
+  responses   SurveyResponse[]
+  status      SurveyStatus     @default(DRAFT)
+  mode        SurveyMode       @default(SIMPLE)
+
+  @@unique([id, tenantId])
+  @@index([tenantId])
+}
+
+enum SurveyMode {
+  SIMPLE
+  ADVANCED
+}
+
+model SurveyResponse {
+  id        String   @id @default(cuid())
+  surveyId  String
+  tenantId  String // 🔥 AJOUTER
+  answers   Json
+  meta      Json?
+  createdAt DateTime @default(now())
+  survey    Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@unique([id, tenantId])
+  @@index([tenantId, surveyId])
+}
+
+model Respondent {
+  id          String    @id @default(cuid())
+  surveyId    String
+  name        String?
+  firstname   String?
+  birthYear   Int?
+  villageId   String?
+  externalId  String?
+  tenantId    String
+  startedAt   DateTime?
+  completedAt DateTime?
+  metadata    Json?
+  survey      Survey    @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  tenant      Tenant    @relation(fields: [tenantId], references: [id])
+
+  village   Village?   @relation(fields: [villageId], references: [id])
   responses Response[]
-  tenant    Tenant     @relation(fields: [tenantId], references: [id])
+
+  @@unique([id, tenantId])
+  @@index([tenantId])
+  @@index([villageId])
+  @@index([completedAt])
+  @@index([surveyId])
 }
 
 model Response {
-  id       String @id @default(cuid())
+  id           String     @id @default(cuid())
+  respondentId String
+  questionId   String
+  tenantId     String
+  answer       Json?
+  respondent   Respondent @relation(fields: [respondentId], references: [id], onDelete: Cascade)
+  tenant       Tenant     @relation(fields: [tenantId], references: [id])
+  question     Question   @relation(fields: [questionId], references: [id])
+
+  @@unique([respondentId, questionId, tenantId])
+  @@unique([id, tenantId])
+  @@index([tenantId, respondentId])
+  @@index([questionId])
+  @@index([tenantId, questionId])
+}
+
+model Question {
+  id       String       @id @default(cuid())
   surveyId String
-  answers  Json
-  meta     Json?
-  survey   Survey @relation(fields: [surveyId], references: [id])
+  tenantId String
+  label    String
+  type     QuestionType
+  position Int
+
+  survey    Survey     @relation(fields: [surveyId], references: [id])
+  tenant    Tenant     @relation(fields: [tenantId], references: [id])
+  responses Response[]
+
+  @@unique([id, tenantId])
+  @@index([surveyId])
+}
+
+enum QuestionType {
+  NUMBER
+  SCALE
+  TEXT
+  TEXTAREA
+  SINGLE_CHOICE
+  MULTIPLE_CHOICE
+  DATE
+  EMAIL
+  PHONE
+}
+
+enum SurveyStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
 }
 
 model Invite {
@@ -136,22 +238,24 @@ model Invite {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   user      User?    @relation(fields: [userId], references: [id])
-  userId    String?  // ⚠️ à la place de email
+  userId    String? // ⚠️ à la place de email
   tenant    Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@unique([email, tenantId])
 }
+
 model PasswordResetToken {
   id        String   @id @default(cuid())
   tokenHash String   @unique
   userId    String
-   tenantId  String
+  tenantId  String
   expiresAt DateTime
   used      Boolean  @default(false)
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@index([userId, tenantId])
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
-}
 
+  @@index([userId, tenantId])
+}

@@ -29,9 +29,13 @@ class TenantController {
   // =========================
   static async updateGeneral(req: Request, res: Response) {
     const tenantId = (req as any).tenantId as string;
-    const generalUpdates: TenantSettings["general"] = req.body;
 
-    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+    // 🔥 IMPORTANT : on attend DIRECTEMENT la section general
+    const generalUpdates = req.body as TenantSettings["general"];
+
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+    });
     if (!tenant) return res.status(404).json({ error: "Tenant not found" });
 
     const currentSettings: TenantSettings =
@@ -39,32 +43,69 @@ class TenantController {
         ? (tenant.settings as TenantSettings)
         : {};
 
-    const currentGeneral = currentSettings.general || {};
-
     const newSettings: TenantSettings = {
       ...currentSettings,
       general: {
-        ...currentGeneral,
+        ...currentSettings.general,
         ...generalUpdates,
       },
     };
+    console.log("newSettings", newSettings);
+    console.log("currentSettings.general", currentSettings.general);
 
     const updatedTenant = await prisma.tenant.update({
       where: { id: tenantId },
-      data: { settings: newSettings as Prisma.InputJsonValue },
+      data: {
+        settings: newSettings as Prisma.InputJsonValue,
+      },
     });
 
-    return res.json({ settings: updatedTenant.settings });
+    return res.json({
+      settings: updatedTenant.settings,
+    });
   }
+
+  // static async updateGeneral(req: Request, res: Response) {
+  //   const tenantId = (req as any).tenantId as string;
+  //   const generalUpdates: TenantSettings["general"] = req.body;
+  //   console.log("generalUpdates:", generalUpdates);
+
+  //   const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+  //   if (!tenant) return res.status(404).json({ error: "Tenant not found" });
+
+  //   const currentSettings: TenantSettings =
+  //     typeof tenant.settings === "object" && tenant.settings !== null
+  //       ? (tenant.settings as TenantSettings)
+  //       : {};
+
+  //   const currentGeneral = currentSettings.general || {};
+
+  //   const newSettings: TenantSettings = {
+  //     ...currentSettings,
+  //     general: {
+  //       ...currentGeneral,
+  //       ...generalUpdates,
+  //     },
+  //   };
+
+  //   const updatedTenant = await prisma.tenant.update({
+  //     where: { id: tenantId },
+  //     data: { settings: newSettings as Prisma.InputJsonValue },
+  //   });
+
+  //   return res.json({ settings: updatedTenant.settings });
+  // }
 
   // =========================
   // 3️⃣ UPDATE Branding Settings
   // =========================
   static async updateBranding(req: Request, res: Response) {
     const tenantId = (req as any).tenantId as string;
-    const brandingUpdates: TenantSettings["branding"] = req.body;
+    const brandingUpdates = req.body as TenantSettings["branding"];
 
-    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+    });
     if (!tenant) return res.status(404).json({ error: "Tenant not found" });
 
     const currentSettings: TenantSettings =
@@ -72,23 +113,55 @@ class TenantController {
         ? (tenant.settings as TenantSettings)
         : {};
 
-    const currentBranding = currentSettings.branding || {};
-
     const newSettings: TenantSettings = {
       ...currentSettings,
       branding: {
-        ...currentBranding,
+        ...currentSettings.branding,
         ...brandingUpdates,
       },
     };
 
     const updatedTenant = await prisma.tenant.update({
       where: { id: tenantId },
-      data: { settings: newSettings as Prisma.InputJsonValue },
+      data: {
+        settings: newSettings as Prisma.InputJsonValue,
+      },
     });
 
-    return res.json({ settings: updatedTenant.settings });
+    return res.json({
+      settings: updatedTenant.settings,
+    });
   }
+
+  // static async updateBranding(req: Request, res: Response) {
+  //   const tenantId = (req as any).tenantId as string;
+  //   const brandingUpdates: TenantSettings["branding"] = req.body;
+
+  //   const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+  //   if (!tenant) return res.status(404).json({ error: "Tenant not found" });
+
+  //   const currentSettings: TenantSettings =
+  //     typeof tenant.settings === "object" && tenant.settings !== null
+  //       ? (tenant.settings as TenantSettings)
+  //       : {};
+
+  //   const currentBranding = currentSettings.branding || {};
+
+  //   const newSettings: TenantSettings = {
+  //     ...currentSettings,
+  //     branding: {
+  //       ...currentBranding,
+  //       ...brandingUpdates,
+  //     },
+  //   };
+
+  //   const updatedTenant = await prisma.tenant.update({
+  //     where: { id: tenantId },
+  //     data: { settings: newSettings as Prisma.InputJsonValue },
+  //   });
+
+  //   return res.json({ settings: updatedTenant.settings });
+  // }
 
   // =========================
   // 4️⃣ CREATE TENANT (avec OWNER)

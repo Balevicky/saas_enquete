@@ -19,8 +19,8 @@ const router = Router();
 // ======================
 router.get(
   "/t/:slug/settings",
-  tenantFromSlug,
   authMiddleware,
+  tenantFromSlug,
   TenantController.getSettings
 );
 
@@ -30,8 +30,9 @@ router.get(
 // ======================
 router.put(
   "/t/:slug/settings/general",
-  tenantFromSlug,
   authMiddleware,
+  tenantFromSlug,
+  // requireRole(["OWNER", "ADMIN"]),
   requireRole(["OWNER", "ADMIN"]),
   validate(updateGeneralSchema),
   TenantController.updateGeneral
@@ -43,8 +44,8 @@ router.put(
 // ======================
 router.put(
   "/t/:slug/settings/branding",
-  tenantFromSlug,
   authMiddleware,
+  tenantFromSlug,
   requireRole(["OWNER", "ADMIN"]),
   validate(updateBrandingSchema),
   TenantController.updateBranding
@@ -55,8 +56,8 @@ router.put(
 // ======================
 router.post(
   "/t/:slug/create",
-  tenantFromSlug,
   authMiddleware,
+  tenantFromSlug,
   requireRole(["OWNER", "ADMIN"]),
   validate(createTenantSchema),
   TenantController.createTenant

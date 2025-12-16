@@ -9,6 +9,8 @@ export const validate =
       params: req.params,
     });
     if (!result.success) {
+      console.log("❌ BRANDING ZOD ERROR", result.error.flatten());
+      // return res.status(400).json({ errors: result.error.flatten() });
       return res.status(400).json({ errors: result.error.flatten() });
     }
     next();

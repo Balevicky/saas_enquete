@@ -208,6 +208,31 @@ const AppNavbar: React.FC = () => {
 
                 <NavDropdown.Divider />
               </NavDropdown>
+              <NavDropdown
+                title={
+                  <span className="d-flex align-items-center gap-2">
+                    Survey
+                  </span>
+                }
+                align="end"
+              >
+                <NavDropdown.Item onClick={() => navigate(path("/surveys"))}>
+                  Survey List
+                </NavDropdown.Item>
+                <NavDropdown.Item
+                  onClick={() => navigate(path("/departement"))}
+                >
+                  Departement
+                </NavDropdown.Item>
+                <NavDropdown.Item onClick={() => navigate(path("/secteur"))}>
+                  Sector
+                </NavDropdown.Item>
+                <NavDropdown.Item onClick={() => navigate(path("/village"))}>
+                  Village
+                </NavDropdown.Item>
+
+                <NavDropdown.Divider />
+              </NavDropdown>
               <Nav.Link as={Link} to={path("/invite")}>
                 Invitations
               </Nav.Link>
