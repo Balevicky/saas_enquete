@@ -13,6 +13,7 @@
     "axios": "^1.13.2",
     "bootstrap": "^5.3.8",
     "react": "^19.2.1",
+    "react-beautiful-dnd": "^13.1.1",
     "react-bootstrap": "^2.10.10",
     "react-dom": "^19.2.1",
     "react-router-dom": "^7.10.1",
@@ -46,6 +47,7 @@
   },
   "devDependencies": {
     "@types/react": "^19.2.7",
+    "@types/react-beautiful-dnd": "^13.1.8",
     "@types/react-dom": "^19.2.3"
   }
 }

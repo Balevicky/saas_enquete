@@ -2,6 +2,16 @@ import { Request, Response } from "express";
 import prisma from "../prisma";
 import { buildPagination, buildSearchFilter } from "../utils/pagination";
 
+function buildQuestionName(position: number, label: string): string {
+  const slug = label
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "");
+
+  return `q_${position}_${slug}`;
+}
 export class QuestionController {
   // ======================
   // CREATE QUESTION
@@ -12,7 +22,8 @@ export class QuestionController {
       const tenantId = (req as any).tenantId;
       const { surveyId } = req.params;
       const { label, type, position } = req.body;
-
+      console.log("req.body", req.body);
+      const name = buildQuestionName(position, label);
       // Vérifier que le survey appartient au tenant
       const survey = await prisma.survey.findFirst({
         where: { id: surveyId, tenantId },
@@ -26,7 +37,7 @@ export class QuestionController {
         });
       }
       const question = await prisma.question.create({
-        data: { surveyId, tenantId, label, type, position },
+        data: { surveyId, tenantId, label, type, position, name },
       });
 
       return res.status(201).json(question);
@@ -126,7 +137,8 @@ export class QuestionController {
       }
 
       const updated = await prisma.question.update({
-        where: { id },
+        // where: { id },
+        where: { id, tenantId, surveyId },
         data: { label, type, position },
       });
 

@@ -13,6 +13,7 @@ import geoService from "../../services/geoService";
 
 const DepartementList: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
+  console.log("tenantSlug", tenantSlug);
 
   const [departements, setDepartements] = useState<any[]>([]);
   const [regions, setRegions] = useState<any[]>([]);

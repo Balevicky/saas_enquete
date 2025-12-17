@@ -27,6 +27,9 @@ import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { TenantProvider } from "./contexts/TenantContext";
 import SurveyListPage from "./pages/surveys/SurveyListPage";
 import SurveyQuestionsPage from "./pages/questions/SurveyQuestionsPage";
+import SurveyCreatePage from "./pages/surveys/SurveyCreatePage";
+import SurveyDetailPage from "./pages/surveys/SurveyDetailPage";
+import SurveyEditPage from "./pages/surveys/SurveyEditPage";
 
 /* =====================================================
    Route privée (auth obligatoire)
@@ -56,7 +59,7 @@ const TenantWrapper: React.FC<{ children: React.ReactNode }> = ({
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
 
   if (!tenantSlug) {
-    return <div className="p-4 text-danger">Tenant missing in URL</div>;
+    return <div className="p-4 text-danger">Tenant missing in URL1</div>;
   }
 
   return <>{children}</>;
@@ -149,9 +152,22 @@ const App: React.FC = () => {
           />
 
           <Route
-            path="/t/:slug/surveys/:surveyId/questions"
-            element={<SurveyQuestionsPage />}
+            path="/t/:tenantSlug/surveys/:surveyId/questions"
+            element={<TenantRoute element={<SurveyQuestionsPage />} />}
           />
+          <Route
+            path="/t/:tenantSlug/surveys/new"
+            element={<TenantRoute element={<SurveyCreatePage />} />}
+          />
+          <Route
+            path="/t/:tenantSlug/surveys/:surveyId"
+            element={<TenantRoute element={<SurveyDetailPage />} />}
+          />
+          <Route
+            path="/t/:tenantSlug/surveys/:surveyId/edit"
+            element={<TenantRoute element={<SurveyEditPage />} />}
+          />
+
           {/* <Route path="/t/:slug/surveys" element={<SurveyListPage />} /> */}
 
           {/* ====================================== */}

@@ -9,7 +9,12 @@ import { buildPagination, buildSearchFilter } from "../utils/pagination";
 // ======================================
 // CRUD SURVEYS
 // ======================================
-
+const defaultSurveyJson = {
+  pages: [],
+  questions: [],
+  logic: [],
+  settings: {},
+};
 export async function createSurvey(req: any, res: Response) {
   try {
     const tenantId = req.tenantId;
@@ -17,7 +22,12 @@ export async function createSurvey(req: any, res: Response) {
     const { title, json } = req.body;
 
     const s = await prisma.survey.create({
-      data: { title, json, tenantId, createdBy: userId },
+      data: {
+        title,
+        json: json ?? defaultSurveyJson,
+        tenantId,
+        createdBy: userId,
+      },
     });
 
     res.status(201).json(s);
@@ -39,7 +49,12 @@ export async function updateSurvey(req: any, res: Response) {
 
     const updated = await prisma.survey.update({
       where: { id },
-      data: { title, json },
+      data: {
+        // title,
+        // json: json ?? defaultSurveyJson
+        ...(title && { title }),
+        ...(json !== undefined && { json }), // ne pas écraser le JSON
+      },
     });
 
     res.json(updated);

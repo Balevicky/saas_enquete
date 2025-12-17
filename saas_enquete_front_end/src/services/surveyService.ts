@@ -1,10 +1,31 @@
 import api from "../utils/api";
 
+// export interface Survey {
+//   id: string;
+//   title: string;
+//   status?: string;
+//   createdAt: string;
+//   _count?: {
+//     respondents: number;
+//     responses: number;
+//   };
+// }
+export type SurveyMode = "SIMPLE" | "ADVANCED";
+
+// export interface Survey {
+//   id: string;
+//   title: string;
+//   mode: SurveyMode; // ✅ AJOUT
+//   status?: string;
+//   createdAt: string;
+// }
 export interface Survey {
   id: string;
   title: string;
   status?: string;
+  mode?: "SIMPLE" | "ADVANCED"; // ✅ pour le blocage
   createdAt: string;
+
   _count?: {
     respondents: number;
     responses: number;
@@ -35,6 +56,12 @@ const surveyService = {
   },
 
   create: async (tenantSlug: string, data: { title: string; json?: any }) => {
+    console.log("tenantSlug:", tenantSlug);
+    console.log("data:", data);
+    //  const res = await axios.post(`/t/${tenantSlug}/auth/login`, {
+    //       email,
+    //       password,
+    //     });
     const res = await api.post(`/t/${tenantSlug}/surveys`, data);
     return res.data;
   },

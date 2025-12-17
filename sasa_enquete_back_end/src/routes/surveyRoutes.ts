@@ -10,29 +10,36 @@ import { tenantFromSlug } from "../middlewares/tenantMiddleware";
 import { authMiddleware } from "../middlewares/authMiddleware";
 import { requireRole } from "../middlewares/roleMiddleware";
 // import { buildPagination } from "../helpers/query";
-
-const router = Router();
+// req.params.slug;
+// const router = Router();
+const router = Router({ mergeParams: true });
 router.use(tenantFromSlug, authMiddleware);
 
+// "/t/:slug/departements",
 // router.get("/surveys", buildPagination, listSurveys);
-router.get("/t/:slug/surveys", listSurveys);
+router.get("/surveys", listSurveys);
 router.post(
-  "/t/:slug/surveys",
+  "/surveys",
   requireRole(["OWNER", "ADMIN", "EDITOR", "ENQUETEUR"]),
   createSurvey
 );
+// router.post(
+//   "/surveys",
+//   requireRole(["OWNER", "ADMIN", "EDITOR", "ENQUETEUR"]),
+//   createSurvey
+// );
 router.get(
-  "/t/:slug/surveys/:id",
+  "/surveys/:id",
   requireRole(["OWNER", "ADMIN", "EDITOR", "ENQUETEUR", "SUPERVISEUR"]),
   getSurvey
 );
 router.put(
-  "/t/:slug/surveys/:id",
+  "/surveys/:id",
   requireRole(["OWNER", "ADMIN", "EDITOR"]),
   updateSurvey
 );
 router.post(
-  "/t/:slug/surveys/:id/publish",
+  "/surveys/:id/publish",
   requireRole(["OWNER", "ADMIN", "SUPERVISEUR"]),
   publishSurvey
 );

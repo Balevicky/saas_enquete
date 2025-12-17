@@ -1,6 +1,7 @@
+import { QuestionType } from "../types/question";
 import api from "../utils/api";
 
-export type QuestionType = "TEXT" | "NUMBER" | "SELECT" | "BOOLEAN";
+// export type QuestionType = "TEXT" | "NUMBER" | "SELECT" | "BOOLEAN";
 
 export interface Question {
   id: string;

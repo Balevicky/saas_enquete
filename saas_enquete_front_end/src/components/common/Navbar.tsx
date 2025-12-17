@@ -220,15 +220,20 @@ const AppNavbar: React.FC = () => {
                   Survey List
                 </NavDropdown.Item>
                 <NavDropdown.Item
-                  onClick={() => navigate(path("/departement"))}
+                  onClick={() => navigate(path("/surveys/new"))}
                 >
-                  Departement
+                  Survey new
                 </NavDropdown.Item>
-                <NavDropdown.Item onClick={() => navigate(path("/secteur"))}>
-                  Sector
+                <NavDropdown.Item
+                  onClick={() => navigate(path("/surveys/:surveyId"))}
+                >
+                  Survey detail
                 </NavDropdown.Item>
-                <NavDropdown.Item onClick={() => navigate(path("/village"))}>
-                  Village
+                <NavDropdown.Item
+                  onClick={() => navigate(path("/surveys/:surveyId/questions"))}
+                  // onClick={() => navigate(path("/surveys/123/questions"))}
+                >
+                  Survey Questions
                 </NavDropdown.Item>
 
                 <NavDropdown.Divider />

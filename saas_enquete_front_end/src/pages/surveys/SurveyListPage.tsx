@@ -3,20 +3,20 @@ import { useParams, Link } from "react-router-dom";
 import surveyService, { Survey } from "../../services/surveyService";
 
 const SurveyListPage = () => {
-  const { slug } = useParams<{ slug: string }>();
+  const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const [surveys, setSurveys] = useState<Survey[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
 
   useEffect(() => {
-    if (!slug) return;
+    if (!tenantSlug) return;
 
     setLoading(true);
     surveyService
-      .list(slug, { page, perPage: 10 })
+      .list(tenantSlug, { page, perPage: 10 })
       .then((res) => setSurveys(res.data))
       .finally(() => setLoading(false));
-  }, [slug, page]);
+  }, [tenantSlug, page]);
 
   if (loading) return <p>Chargement des surveys...</p>;
 
@@ -24,7 +24,7 @@ const SurveyListPage = () => {
     <div style={{ padding: 24 }}>
       <div style={{ display: "flex", justifyContent: "space-between" }}>
         <h2>📋 Surveys</h2>
-        <Link to={`/t/${slug}/surveys/new`}>➕ Nouveau survey</Link>
+        <Link to={`/t/${tenantSlug}/surveys/new`}>➕ Nouveau survey</Link>
       </div>
 
       {surveys.length === 0 && <p>Aucun survey disponible.</p>}
@@ -45,7 +45,7 @@ const SurveyListPage = () => {
               {s._count?.responses ?? 0} réponses
             </small>
             <br />
-            <Link to={`/t/${slug}/surveys/${s.id}`}>Ouvrir</Link>
+            <Link to={`/t/${tenantSlug}/surveys/${s.id}`}>Ouvrir</Link>
           </li>
         ))}
       </ul>

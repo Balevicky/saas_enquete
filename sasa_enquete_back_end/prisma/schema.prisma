@@ -198,6 +198,7 @@ model Question {
   id       String       @id @default(cuid())
   surveyId String
   tenantId String
+  name      String
   label    String
   type     QuestionType
   position Int
@@ -208,6 +209,8 @@ model Question {
 
   @@unique([id, tenantId])
   @@index([surveyId])
+  @@unique([surveyId, name, tenantId])
+  @@unique([surveyId, name])
 }
 
 enum QuestionType {
