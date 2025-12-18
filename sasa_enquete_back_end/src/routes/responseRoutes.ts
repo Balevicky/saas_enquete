@@ -10,7 +10,13 @@ router.use(tenantFromSlug, authMiddleware);
 router.post(
   "/t/:slug/respondents/:respondentId/responses",
   requireRole(["ENQUETEUR"]),
-  ResponseController.save
+  ResponseController.saveOrUpdateAll
 );
+
+// router.post(
+//   "/t/:slug/respondents/:respondentId/responses",
+//   requireRole(["ENQUETEUR"]),
+//   ResponseController.save
+// );
 
 export default router;

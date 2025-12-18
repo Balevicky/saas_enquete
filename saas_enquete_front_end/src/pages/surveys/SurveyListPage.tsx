@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import surveyService, { Survey } from "../../services/surveyService";
+import path from "path";
 
 const SurveyListPage = () => {
-  const { tenantSlug } = useParams<{ tenantSlug: string }>();
+  const { tenantSlug, surveyId } = useParams<{
+    tenantSlug: string;
+    surveyId: string;
+  }>();
   const [surveys, setSurveys] = useState<Survey[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -44,6 +48,9 @@ const SurveyListPage = () => {
               👥 {s._count?.respondents ?? 0} respondents — 📝{" "}
               {s._count?.responses ?? 0} réponses
             </small>
+            {/* <Link to={`/t/${tenantSlug}/surveys/${surveyId}/respondents/new`}>
+              ➕ Ajouter un participant
+            </Link> */}
             <br />
             <Link to={`/t/${tenantSlug}/surveys/${s.id}`}>Ouvrir</Link>
           </li>

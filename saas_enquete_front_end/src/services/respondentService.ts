@@ -1,5 +1,24 @@
 import api from "../utils/api";
 
+// 🔹 Interface exportée
+// export interface Respondent {
+//   id: string;
+//   name: string;
+//   email: string;
+//   status: "pending" | "completed";
+// }
+export interface Respondent {
+  id: string;
+  name: string;
+  firstname?: string;
+  birthYear?: number;
+  villageId?: string;
+  externalId?: string;
+  metadata?: any;
+  startedAt: string;
+  completedAt?: string | null;
+}
+
 export const respondentService = {
   list: (slug: string, surveyId: string, params?: any) =>
     api.get(`/t/${slug}/surveys/${surveyId}/respondents`, { params }),

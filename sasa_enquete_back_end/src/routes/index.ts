@@ -33,7 +33,7 @@ router.use("/", inviteRouter);
 router.use("/t/:slug", surveyRoutes);
 // router.use("/", surveyRoutes);
 router.use("/t/:slug", questionRoutes);
-router.use("/", respondentRoutes);
+router.use("/t/:slug", respondentRoutes);
 router.use("/", responseRoutes);
 router.use("/", surveyResponseRoutes);
 router.use("", surveyBuilderRoutes);

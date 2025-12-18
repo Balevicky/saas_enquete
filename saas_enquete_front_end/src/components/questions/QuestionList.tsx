@@ -1,57 +1,86 @@
 import React from "react";
 import { Question } from "../../services/questionService";
+import SortableQuestionItem from "./SortableQuestionItem";
 
 interface Props {
   questions: Question[];
   onDelete: (id: string) => void;
   disabled?: boolean;
-  renderExtra?: (q: Question) => JSX.Element; // ✅ optionnel
+  renderExtra?: (question: Question) => React.ReactNode;
 }
 
-const QuestionList: React.FC<Props> = ({
+const QuestionList = ({
   questions,
   onDelete,
-  disabled = false,
+  disabled,
   renderExtra,
-}) => {
+}: Props) => {
   return (
     <div>
       {questions.map((q) => (
-        <div
+        <SortableQuestionItem
           key={q.id}
-          style={{
-            padding: 12,
-            marginBottom: 8,
-            border: "1px solid #ddd",
-            borderRadius: 4,
-            background: "#fff",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <span>
-            {q.position}. {q.label} ({q.type})
-          </span>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {renderExtra && renderExtra(q)}
-            {!disabled && (
-              <button
-                onClick={() => onDelete(q.id)}
-                style={{ cursor: "pointer" }}
-              >
-                ❌
-              </button>
-            )}
-          </div>
-        </div>
+          question={q}
+          onDelete={onDelete}
+          disabled={disabled}
+          renderExtra={renderExtra}
+        />
       ))}
     </div>
   );
 };
 
 export default QuestionList;
+
+// ============================== PAS TROP BON
+// import React, { ReactNode } from "react";
+// import { Question } from "../../services/questionService";
+
+// interface Props {
+//   questions: Question[];
+//   onDelete: (id: string) => void;
+//   disabled?: boolean;
+//   renderExtra?: (question: Question) => ReactNode;
+//   // renderExtra?: (question: Question) => JSX.Element;
+// }
+
+// const QuestionList = ({
+//   questions,
+//   onDelete,
+//   disabled,
+//   renderExtra,
+// }: Props) => {
+//   return (
+//     <div>
+//       {questions.map((q) => (
+//         <div
+//           key={q.id}
+//           style={{
+//             padding: 12,
+//             marginBottom: 8,
+//             border: "1px solid #ddd",
+//             borderRadius: 4,
+//             background: "#fff",
+//             display: "flex",
+//             justifyContent: "space-between",
+//             alignItems: "center",
+//           }}
+//         >
+//           <span>
+//             {q.position}. {q.label} ({q.type})
+//           </span>
+
+//           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+//             {renderExtra && renderExtra(q)}
+//             {!disabled && <button onClick={() => onDelete(q.id)}>❌</button>}
+//           </div>
+//         </div>
+//       ))}
+//     </div>
+//   );
+// };
+
+// export default QuestionList;
 
 // =====================================
 // import { Question } from "../../services/questionService";

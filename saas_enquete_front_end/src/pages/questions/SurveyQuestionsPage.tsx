@@ -13,8 +13,6 @@ import QuestionForm from "../../components/questions/QuestionForm";
 import QuestionList from "../../components/questions/QuestionList";
 import { QuestionType } from "../../types/question";
 
-const QUESTIONS_PER_PAGE = 5;
-
 const SurveyQuestionsPage = () => {
   const navigate = useNavigate();
   const { tenantSlug, surveyId } = useParams<{
@@ -23,11 +21,7 @@ const SurveyQuestionsPage = () => {
   }>();
 
   const [survey, setSurvey] = useState<Survey | null>(null);
-  const [questionsByPage, setQuestionsByPage] = useState<
-    Record<number, Question[]>
-  >({});
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
 
   const isAdvanced = survey?.mode === "ADVANCED";
@@ -38,7 +32,6 @@ const SurveyQuestionsPage = () => {
   const load = async () => {
     if (!tenantSlug || !surveyId) return;
     setLoading(true);
-
     try {
       const [surveyRes, questionsRes] = await Promise.all([
         surveyService.get(tenantSlug, surveyId),
@@ -47,17 +40,9 @@ const SurveyQuestionsPage = () => {
 
       setSurvey(surveyRes);
 
-      // Trier et paginer
+      // Trier par position
       const sorted = questionsRes.data.sort((a, b) => a.position - b.position);
-      const pages: Record<number, Question[]> = {};
-      for (let i = 0; i < sorted.length; i++) {
-        const page = Math.floor(i / QUESTIONS_PER_PAGE) + 1;
-        if (!pages[page]) pages[page] = [];
-        pages[page].push(sorted[i]);
-      }
-
-      setQuestionsByPage(pages);
-      setTotalPages(Object.keys(pages).length);
+      setQuestions(sorted);
     } finally {
       setLoading(false);
     }
@@ -79,7 +64,7 @@ const SurveyQuestionsPage = () => {
     await questionService.create(tenantSlug, surveyId, {
       label: data.label,
       type: data.type,
-      position: Object.values(questionsByPage).flat().length + 1,
+      position: questions.length + 1,
     });
 
     load();
@@ -100,65 +85,24 @@ const SurveyQuestionsPage = () => {
   // ======================
   const handleDragEnd = async (event: DragEndEvent) => {
     if (isAdvanced) return;
+
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
-    const pageQuestions = questionsByPage[currentPage] || [];
-    const oldIndex = pageQuestions.findIndex((q) => q.id === active.id);
-    const newIndex = pageQuestions.findIndex((q) => q.id === over.id);
+    const oldIndex = questions.findIndex((q) => q.id === active.id);
+    const newIndex = questions.findIndex((q) => q.id === over.id);
 
-    const reordered = arrayMove(pageQuestions, oldIndex, newIndex).map(
+    const reordered = arrayMove(questions, oldIndex, newIndex).map(
       (q, idx) => ({
         ...q,
-        position: (currentPage - 1) * QUESTIONS_PER_PAGE + idx + 1,
+        position: idx + 1,
       })
     );
 
-    setQuestionsByPage((prev) => ({ ...prev, [currentPage]: reordered }));
+    setQuestions(reordered);
 
     // Persist
     for (const q of reordered) {
-      await questionService.update(tenantSlug!, surveyId!, q.id, {
-        position: q.position,
-      });
-    }
-  };
-
-  // ======================
-  // MOVE QUESTION TO ANOTHER PAGE
-  // ======================
-  const moveQuestionToPage = async (questionId: string, targetPage: number) => {
-    const oldPageQuestions = [...(questionsByPage[currentPage] || [])];
-    const question = oldPageQuestions.find((q) => q.id === questionId);
-    if (!question) return;
-
-    const newOldPageQuestions = oldPageQuestions.filter(
-      (q) => q.id !== questionId
-    );
-    const newTargetPageQuestions = [
-      ...(questionsByPage[targetPage] || []),
-      question,
-    ];
-
-    const updatedPages: Record<number, Question[]> = {
-      ...questionsByPage,
-      [currentPage]: newOldPageQuestions.map((q, idx) => ({
-        ...q,
-        position: (currentPage - 1) * QUESTIONS_PER_PAGE + idx + 1,
-      })),
-      [targetPage]: newTargetPageQuestions.map((q, idx) => ({
-        ...q,
-        position: (targetPage - 1) * QUESTIONS_PER_PAGE + idx + 1,
-      })),
-    };
-
-    setQuestionsByPage(updatedPages);
-
-    // Persist
-    for (const q of [
-      ...updatedPages[currentPage],
-      ...updatedPages[targetPage],
-    ]) {
       await questionService.update(tenantSlug!, surveyId!, q.id, {
         position: q.position,
       });
@@ -196,56 +140,711 @@ const SurveyQuestionsPage = () => {
 
       <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext
-          items={(questionsByPage[currentPage] || []).map((q) => q.id)}
+          items={questions.map((q) => q.id)}
           strategy={verticalListSortingStrategy}
         >
           <QuestionList
-            questions={questionsByPage[currentPage] || []}
+            questions={questions}
             onDelete={deleteQuestion}
             disabled={isAdvanced}
-            renderExtra={(q) => (
-              <select
-                value={currentPage}
-                onChange={(e) =>
-                  moveQuestionToPage(q.id, Number(e.target.value))
-                }
-              >
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(
-                  (p) => (
-                    <option key={p} value={p}>
-                      Page {p}
-                    </option>
-                  )
-                )}
-              </select>
-            )}
           />
         </SortableContext>
       </DndContext>
-
-      {/* Pagination */}
-      <div style={{ marginTop: 20 }}>
-        <button
-          disabled={currentPage === 1}
-          onClick={() => setCurrentPage((p) => p - 1)}
-        >
-          ◀ Précédent
-        </button>
-        <span style={{ margin: "0 10px" }}>
-          Page {currentPage} / {totalPages}
-        </span>
-        <button
-          disabled={currentPage === totalPages}
-          onClick={() => setCurrentPage((p) => p + 1)}
-        >
-          Suivant ▶
-        </button>
-      </div>
     </div>
   );
 };
 
 export default SurveyQuestionsPage;
+
+// ============================
+// import { useEffect, useState } from "react";
+// import { useNavigate, useParams } from "react-router-dom";
+// import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
+// import {
+//   SortableContext,
+//   verticalListSortingStrategy,
+//   arrayMove,
+// } from "@dnd-kit/sortable";
+
+// import questionService, { Question } from "../../services/questionService";
+// import surveyService, { Survey } from "../../services/surveyService";
+// import QuestionForm from "../../components/questions/QuestionForm";
+// import QuestionList from "../../components/questions/QuestionList";
+// import { QuestionType } from "../../types/question";
+
+// const QUESTIONS_PER_PAGE = 5;
+
+// const SurveyQuestionsPage = () => {
+//   const navigate = useNavigate();
+//   const { tenantSlug, surveyId } = useParams<{
+//     tenantSlug: string;
+//     surveyId: string;
+//   }>();
+
+//   const [survey, setSurvey] = useState<Survey | null>(null);
+//   const [questions, setQuestions] = useState<Question[]>([]);
+//   const [currentPage, setCurrentPage] = useState(1);
+//   const [totalPages, setTotalPages] = useState(1);
+//   const [loading, setLoading] = useState(true);
+
+//   const isAdvanced = survey?.mode === "ADVANCED";
+
+//   // ======================
+//   // LOAD
+//   // ======================
+//   const load = async () => {
+//     if (!tenantSlug || !surveyId) return;
+//     setLoading(true);
+//     try {
+//       const [surveyRes, questionsRes] = await Promise.all([
+//         surveyService.get(tenantSlug, surveyId),
+//         questionService.list(tenantSlug, surveyId),
+//       ]);
+
+//       setSurvey(surveyRes);
+
+//       const sorted = questionsRes.data.sort((a, b) => a.position - b.position);
+//       setQuestions(sorted);
+//       setTotalPages(Math.ceil(sorted.length / QUESTIONS_PER_PAGE));
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   useEffect(() => {
+//     load();
+//   }, [tenantSlug, surveyId]);
+
+//   // ======================
+//   // CREATE
+//   // ======================
+//   const createQuestion = async (data: {
+//     label: string;
+//     type: QuestionType;
+//   }) => {
+//     if (!tenantSlug || !surveyId || isAdvanced) return;
+
+//     await questionService.create(tenantSlug, surveyId, {
+//       label: data.label,
+//       type: data.type,
+//       position: questions.length + 1,
+//     });
+
+//     load();
+//   };
+
+//   // ======================
+//   // DELETE
+//   // ======================
+//   const deleteQuestion = async (id: string) => {
+//     if (!tenantSlug || !surveyId || isAdvanced) return;
+
+//     await questionService.remove(tenantSlug, surveyId, id);
+//     load();
+//   };
+
+//   // ======================
+//   // DRAG END (inter-pages)
+//   // ======================
+//   const handleDragEnd = async (event: DragEndEvent) => {
+//     if (isAdvanced) return;
+
+//     const { active, over } = event;
+//     if (!over || active.id === over.id) return;
+
+//     const oldIndex = questions.findIndex((q) => q.id === active.id);
+//     const newIndex = questions.findIndex((q) => q.id === over.id);
+
+//     const reordered = arrayMove(questions, oldIndex, newIndex).map(
+//       (q, idx) => ({
+//         ...q,
+//         position: idx + 1,
+//       })
+//     );
+
+//     setQuestions(reordered);
+//     setTotalPages(Math.ceil(reordered.length / QUESTIONS_PER_PAGE));
+
+//     // Persist
+//     for (const q of reordered) {
+//       await questionService.update(tenantSlug!, surveyId!, q.id, {
+//         position: q.position,
+//       });
+//     }
+//   };
+
+//   if (loading) return <p>Chargement des questions...</p>;
+
+//   // Questions de la page courante
+//   const pageQuestions = questions.slice(
+//     (currentPage - 1) * QUESTIONS_PER_PAGE,
+//     currentPage * QUESTIONS_PER_PAGE
+//   );
+
+//   return (
+//     <div style={{ padding: 24 }}>
+//       <h2>🧩 Questions du survey</h2>
+
+//       {isAdvanced && (
+//         <div
+//           style={{
+//             padding: 16,
+//             background: "#f8d7da",
+//             border: "1px solid #f5c2c7",
+//             marginBottom: 20,
+//           }}
+//         >
+//           <strong>🚫 Mode avancé</strong>
+//           <p>Les questions sont gérées via le Survey Builder</p>
+//           <button
+//             onClick={() =>
+//               navigate(`/t/${tenantSlug}/surveys/${surveyId}/builder`)
+//             }
+//           >
+//             Ouvrir le Builder
+//           </button>
+//         </div>
+//       )}
+
+//       {!isAdvanced && <QuestionForm onSubmit={createQuestion} />}
+
+//       <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+//         <SortableContext
+//           items={pageQuestions.map((q) => q.id)}
+//           strategy={verticalListSortingStrategy}
+//         >
+//           <QuestionList
+//             questions={pageQuestions}
+//             onDelete={deleteQuestion}
+//             disabled={isAdvanced}
+//           />
+//         </SortableContext>
+//       </DndContext>
+
+//       {/* Pagination */}
+//       <div style={{ marginTop: 20 }}>
+//         <button
+//           disabled={currentPage === 1}
+//           onClick={() => setCurrentPage((p) => p - 1)}
+//         >
+//           ◀ Précédent
+//         </button>
+//         <span style={{ margin: "0 10px" }}>
+//           Page {currentPage} / {totalPages}
+//         </span>
+//         <button
+//           disabled={currentPage === totalPages}
+//           onClick={() => setCurrentPage((p) => p + 1)}
+//         >
+//           Suivant ▶
+//         </button>
+//       </div>
+//     </div>
+//   );
+// };
+
+// export default SurveyQuestionsPage;
+
+// ==============================
+// import { useEffect, useState } from "react";
+// import { useNavigate, useParams } from "react-router-dom";
+// import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
+// import {
+//   SortableContext,
+//   verticalListSortingStrategy,
+//   arrayMove,
+// } from "@dnd-kit/sortable";
+
+// import questionService, { Question } from "../../services/questionService";
+// import surveyService, { Survey } from "../../services/surveyService";
+// import QuestionForm from "../../components/questions/QuestionForm";
+// import QuestionList from "../../components/questions/QuestionList";
+// import { QuestionType } from "../../types/question";
+
+// const QUESTIONS_PER_PAGE = 5;
+
+// const SurveyQuestionsPage = () => {
+//   const navigate = useNavigate();
+//   const { tenantSlug, surveyId } = useParams<{
+//     tenantSlug: string;
+//     surveyId: string;
+//   }>();
+
+//   const [survey, setSurvey] = useState<Survey | null>(null);
+//   const [questionsByPage, setQuestionsByPage] = useState<
+//     Record<number, Question[]>
+//   >({});
+//   const [currentPage, setCurrentPage] = useState(1);
+//   const [totalPages, setTotalPages] = useState(1);
+//   const [loading, setLoading] = useState(true);
+
+//   const isAdvanced = survey?.mode === "ADVANCED";
+
+//   // ======================
+//   // LOAD SURVEY + QUESTIONS
+//   // ======================
+//   const load = async () => {
+//     if (!tenantSlug || !surveyId) return;
+//     setLoading(true);
+
+//     try {
+//       const [surveyRes, questionsRes] = await Promise.all([
+//         surveyService.get(tenantSlug, surveyId),
+//         questionService.list(tenantSlug, surveyId),
+//       ]);
+
+//       setSurvey(surveyRes);
+
+//       // Trier et paginer
+//       const sorted = questionsRes.data.sort((a, b) => a.position - b.position);
+//       const pages: Record<number, Question[]> = {};
+//       for (let i = 0; i < sorted.length; i++) {
+//         const page = Math.floor(i / QUESTIONS_PER_PAGE) + 1;
+//         if (!pages[page]) pages[page] = [];
+//         pages[page].push(sorted[i]);
+//       }
+
+//       setQuestionsByPage(pages);
+//       setTotalPages(Object.keys(pages).length);
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   useEffect(() => {
+//     load();
+//   }, [tenantSlug, surveyId]);
+
+//   // ======================
+//   // CREATE QUESTION
+//   // ======================
+//   const createQuestion = async (data: {
+//     label: string;
+//     type: QuestionType;
+//   }) => {
+//     if (!tenantSlug || !surveyId || isAdvanced) return;
+
+//     await questionService.create(tenantSlug, surveyId, {
+//       label: data.label,
+//       type: data.type,
+//       position: Object.values(questionsByPage).flat().length + 1,
+//     });
+
+//     load();
+//   };
+
+//   // ======================
+//   // DELETE QUESTION
+//   // ======================
+//   const deleteQuestion = async (id: string) => {
+//     if (!tenantSlug || !surveyId || isAdvanced) return;
+
+//     await questionService.remove(tenantSlug, surveyId, id);
+//     load();
+//   };
+
+//   // ======================
+//   // DRAG END (vertical)
+//   // ======================
+//   const handleDragEnd = async (event: DragEndEvent) => {
+//     if (isAdvanced) return;
+
+//     const { active, over } = event;
+//     if (!over || active.id === over.id) return;
+
+//     const pageQuestions = questionsByPage[currentPage] || [];
+//     const oldIndex = pageQuestions.findIndex((q) => q.id === active.id);
+//     const newIndex = pageQuestions.findIndex((q) => q.id === over.id);
+
+//     const reordered = arrayMove(pageQuestions, oldIndex, newIndex).map(
+//       (q, idx) => ({
+//         ...q,
+//         position: (currentPage - 1) * QUESTIONS_PER_PAGE + idx + 1,
+//       })
+//     );
+
+//     setQuestionsByPage((prev) => ({ ...prev, [currentPage]: reordered }));
+
+//     // Persist
+//     for (const q of reordered) {
+//       await questionService.update(tenantSlug!, surveyId!, q.id, {
+//         position: q.position,
+//       });
+//     }
+//   };
+
+//   // ======================
+//   // MOVE QUESTION TO ANOTHER PAGE
+//   // ======================
+//   const moveQuestionToPage = async (questionId: string, targetPage: number) => {
+//     const oldPageQuestions = [...(questionsByPage[currentPage] || [])];
+//     const question = oldPageQuestions.find((q) => q.id === questionId);
+//     if (!question) return;
+
+//     const newOldPageQuestions = oldPageQuestions.filter(
+//       (q) => q.id !== questionId
+//     );
+//     const newTargetPageQuestions = [
+//       ...(questionsByPage[targetPage] || []),
+//       question,
+//     ];
+
+//     const updatedPages: Record<number, Question[]> = {
+//       ...questionsByPage,
+//       [currentPage]: newOldPageQuestions.map((q, idx) => ({
+//         ...q,
+//         position: (currentPage - 1) * QUESTIONS_PER_PAGE + idx + 1,
+//       })),
+//       [targetPage]: newTargetPageQuestions.map((q, idx) => ({
+//         ...q,
+//         position: (targetPage - 1) * QUESTIONS_PER_PAGE + idx + 1,
+//       })),
+//     };
+
+//     setQuestionsByPage(updatedPages);
+
+//     // Persist
+//     for (const q of [
+//       ...updatedPages[currentPage],
+//       ...updatedPages[targetPage],
+//     ]) {
+//       await questionService.update(tenantSlug!, surveyId!, q.id, {
+//         position: q.position,
+//       });
+//     }
+//   };
+
+//   if (loading) return <p>Chargement des questions...</p>;
+
+//   return (
+//     <div style={{ padding: 24 }}>
+//       <h2>🧩 Questions du survey</h2>
+
+//       {isAdvanced && (
+//         <div
+//           style={{
+//             padding: 16,
+//             background: "#f8d7da",
+//             border: "1px solid #f5c2c7",
+//             marginBottom: 20,
+//           }}
+//         >
+//           <strong>🚫 Mode avancé</strong>
+//           <p>Les questions sont gérées via le Survey Builder</p>
+//           <button
+//             onClick={() =>
+//               navigate(`/t/${tenantSlug}/surveys/${surveyId}/builder`)
+//             }
+//           >
+//             Ouvrir le Builder
+//           </button>
+//         </div>
+//       )}
+
+//       {!isAdvanced && <QuestionForm onSubmit={createQuestion} />}
+
+//       <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+//         <SortableContext
+//           items={(questionsByPage[currentPage] || []).map((q) => q.id)}
+//           strategy={verticalListSortingStrategy}
+//         >
+//           <QuestionList
+//             questions={questionsByPage[currentPage] || []}
+//             onDelete={deleteQuestion}
+//             disabled={isAdvanced}
+//             renderExtra={(q: Question) => (
+//               <select
+//                 value={currentPage}
+//                 onChange={(e) =>
+//                   moveQuestionToPage(q.id, Number(e.target.value))
+//                 }
+//               >
+//                 {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+//                   (p) => (
+//                     <option key={p} value={p}>
+//                       Page {p}
+//                     </option>
+//                   )
+//                 )}
+//               </select>
+//             )}
+//           />
+//         </SortableContext>
+//       </DndContext>
+
+//       {/* Pagination */}
+//       <div style={{ marginTop: 20 }}>
+//         <button
+//           disabled={currentPage === 1}
+//           onClick={() => setCurrentPage((p) => p - 1)}
+//         >
+//           ◀ Précédent
+//         </button>
+//         <span style={{ margin: "0 10px" }}>
+//           Page {currentPage} / {totalPages}
+//         </span>
+//         <button
+//           disabled={currentPage === totalPages}
+//           onClick={() => setCurrentPage((p) => p + 1)}
+//         >
+//           Suivant ▶
+//         </button>
+//       </div>
+//     </div>
+//   );
+// };
+
+// export default SurveyQuestionsPage;
+
+// =================================== PAS TROP BON
+// import { useEffect, useState } from "react";
+// import { useNavigate, useParams } from "react-router-dom";
+// import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
+// import {
+//   SortableContext,
+//   verticalListSortingStrategy,
+//   arrayMove,
+// } from "@dnd-kit/sortable";
+
+// import questionService, { Question } from "../../services/questionService";
+// import surveyService, { Survey } from "../../services/surveyService";
+// import QuestionForm from "../../components/questions/QuestionForm";
+// import QuestionList from "../../components/questions/QuestionList";
+// import { QuestionType } from "../../types/question";
+
+// const QUESTIONS_PER_PAGE = 5;
+
+// const SurveyQuestionsPage = () => {
+//   const navigate = useNavigate();
+//   const { tenantSlug, surveyId } = useParams<{
+//     tenantSlug: string;
+//     surveyId: string;
+//   }>();
+
+//   const [survey, setSurvey] = useState<Survey | null>(null);
+//   const [questionsByPage, setQuestionsByPage] = useState<
+//     Record<number, Question[]>
+//   >({});
+//   const [currentPage, setCurrentPage] = useState(1);
+//   const [totalPages, setTotalPages] = useState(1);
+//   const [loading, setLoading] = useState(true);
+
+//   const isAdvanced = survey?.mode === "ADVANCED";
+
+//   // ======================
+//   // LOAD SURVEY + QUESTIONS
+//   // ======================
+//   const load = async () => {
+//     if (!tenantSlug || !surveyId) return;
+//     setLoading(true);
+
+//     try {
+//       const [surveyRes, questionsRes] = await Promise.all([
+//         surveyService.get(tenantSlug, surveyId),
+//         questionService.list(tenantSlug, surveyId),
+//       ]);
+
+//       setSurvey(surveyRes);
+
+//       // Trier et paginer
+//       const sorted = questionsRes.data.sort((a, b) => a.position - b.position);
+//       const pages: Record<number, Question[]> = {};
+//       for (let i = 0; i < sorted.length; i++) {
+//         const page = Math.floor(i / QUESTIONS_PER_PAGE) + 1;
+//         if (!pages[page]) pages[page] = [];
+//         pages[page].push(sorted[i]);
+//       }
+
+//       setQuestionsByPage(pages);
+//       setTotalPages(Object.keys(pages).length);
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   useEffect(() => {
+//     load();
+//   }, [tenantSlug, surveyId]);
+
+//   // ======================
+//   // CREATE QUESTION
+//   // ======================
+//   const createQuestion = async (data: {
+//     label: string;
+//     type: QuestionType;
+//   }) => {
+//     if (!tenantSlug || !surveyId || isAdvanced) return;
+
+//     await questionService.create(tenantSlug, surveyId, {
+//       label: data.label,
+//       type: data.type,
+//       position: Object.values(questionsByPage).flat().length + 1,
+//     });
+
+//     load();
+//   };
+
+//   // ======================
+//   // DELETE QUESTION
+//   // ======================
+//   const deleteQuestion = async (id: string) => {
+//     if (!tenantSlug || !surveyId || isAdvanced) return;
+
+//     await questionService.remove(tenantSlug, surveyId, id);
+//     load();
+//   };
+
+//   // ======================
+//   // DRAG END
+//   // ======================
+//   const handleDragEnd = async (event: DragEndEvent) => {
+//     if (isAdvanced) return;
+//     const { active, over } = event;
+//     if (!over || active.id === over.id) return;
+
+//     const pageQuestions = questionsByPage[currentPage] || [];
+//     const oldIndex = pageQuestions.findIndex((q) => q.id === active.id);
+//     const newIndex = pageQuestions.findIndex((q) => q.id === over.id);
+
+//     const reordered = arrayMove(pageQuestions, oldIndex, newIndex).map(
+//       (q, idx) => ({
+//         ...q,
+//         position: (currentPage - 1) * QUESTIONS_PER_PAGE + idx + 1,
+//       })
+//     );
+
+//     setQuestionsByPage((prev) => ({ ...prev, [currentPage]: reordered }));
+
+//     // Persist
+//     for (const q of reordered) {
+//       await questionService.update(tenantSlug!, surveyId!, q.id, {
+//         position: q.position,
+//       });
+//     }
+//   };
+
+//   // ======================
+//   // MOVE QUESTION TO ANOTHER PAGE
+//   // ======================
+//   const moveQuestionToPage = async (questionId: string, targetPage: number) => {
+//     const oldPageQuestions = [...(questionsByPage[currentPage] || [])];
+//     const question = oldPageQuestions.find((q) => q.id === questionId);
+//     if (!question) return;
+
+//     const newOldPageQuestions = oldPageQuestions.filter(
+//       (q) => q.id !== questionId
+//     );
+//     const newTargetPageQuestions = [
+//       ...(questionsByPage[targetPage] || []),
+//       question,
+//     ];
+
+//     const updatedPages: Record<number, Question[]> = {
+//       ...questionsByPage,
+//       [currentPage]: newOldPageQuestions.map((q, idx) => ({
+//         ...q,
+//         position: (currentPage - 1) * QUESTIONS_PER_PAGE + idx + 1,
+//       })),
+//       [targetPage]: newTargetPageQuestions.map((q, idx) => ({
+//         ...q,
+//         position: (targetPage - 1) * QUESTIONS_PER_PAGE + idx + 1,
+//       })),
+//     };
+
+//     setQuestionsByPage(updatedPages);
+
+//     // Persist
+//     for (const q of [
+//       ...updatedPages[currentPage],
+//       ...updatedPages[targetPage],
+//     ]) {
+//       await questionService.update(tenantSlug!, surveyId!, q.id, {
+//         position: q.position,
+//       });
+//     }
+//   };
+
+//   if (loading) return <p>Chargement des questions...</p>;
+
+//   return (
+//     <div style={{ padding: 24 }}>
+//       <h2>🧩 Questions du survey</h2>
+
+//       {isAdvanced && (
+//         <div
+//           style={{
+//             padding: 16,
+//             background: "#f8d7da",
+//             border: "1px solid #f5c2c7",
+//             marginBottom: 20,
+//           }}
+//         >
+//           <strong>🚫 Mode avancé</strong>
+//           <p>Les questions sont gérées via le Survey Builder</p>
+//           <button
+//             onClick={() =>
+//               navigate(`/t/${tenantSlug}/surveys/${surveyId}/builder`)
+//             }
+//           >
+//             Ouvrir le Builder
+//           </button>
+//         </div>
+//       )}
+
+//       {!isAdvanced && <QuestionForm onSubmit={createQuestion} />}
+
+//       <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+//         <SortableContext
+//           items={(questionsByPage[currentPage] || []).map((q) => q.id)}
+//           strategy={verticalListSortingStrategy}
+//         >
+//           <QuestionList
+//             questions={questionsByPage[currentPage] || []}
+//             onDelete={deleteQuestion}
+//             disabled={isAdvanced}
+//             renderExtra={(q) => (
+//               <select
+//                 value={currentPage}
+//                 onChange={(e) =>
+//                   moveQuestionToPage(q.id, Number(e.target.value))
+//                 }
+//               >
+//                 {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+//                   (p) => (
+//                     <option key={p} value={p}>
+//                       Page {p}
+//                     </option>
+//                   )
+//                 )}
+//               </select>
+//             )}
+//           />
+//         </SortableContext>
+//       </DndContext>
+
+//       {/* Pagination */}
+//       <div style={{ marginTop: 20 }}>
+//         <button
+//           disabled={currentPage === 1}
+//           onClick={() => setCurrentPage((p) => p - 1)}
+//         >
+//           ◀ Précédent
+//         </button>
+//         <span style={{ margin: "0 10px" }}>
+//           Page {currentPage} / {totalPages}
+//         </span>
+//         <button
+//           disabled={currentPage === totalPages}
+//           onClick={() => setCurrentPage((p) => p + 1)}
+//         >
+//           Suivant ▶
+//         </button>
+//       </div>
+//     </div>
+//   );
+// };
+
+// export default SurveyQuestionsPage;
 
 // ======================================
 // import { useEffect, useState } from "react";

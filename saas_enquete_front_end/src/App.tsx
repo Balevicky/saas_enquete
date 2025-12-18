@@ -30,6 +30,10 @@ import SurveyQuestionsPage from "./pages/questions/SurveyQuestionsPage";
 import SurveyCreatePage from "./pages/surveys/SurveyCreatePage";
 import SurveyDetailPage from "./pages/surveys/SurveyDetailPage";
 import SurveyEditPage from "./pages/surveys/SurveyEditPage";
+import RespondentListPage from "./pages/respondents/RespondentListPage";
+import RespondentCreatePage from "./pages/respondents/RespondentCreatePage";
+import RespondentDetailPage from "./pages/respondents/RespondentDetailPage";
+import RespondentResponsePage from "./pages/respondents/RespondentResponsePage";
 
 /* =====================================================
    Route privée (auth obligatoire)
@@ -94,7 +98,6 @@ const App: React.FC = () => {
           {/* ====================================== */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupTenantPage />} />
-
           {/* ====================================== */}
           {/* Routes publiques tenant-aware (auth) */}
           {/* ====================================== */}
@@ -108,7 +111,6 @@ const App: React.FC = () => {
             path="/t/:tenantSlug/reset-password"
             element={<ResetPasswordPage />}
           />
-
           {/* ====================================== */}
           {/* Routes protégées multi-tenant */}
           {/* ====================================== */}
@@ -116,32 +118,26 @@ const App: React.FC = () => {
             path="/t/:tenantSlug/dashboard"
             element={<TenantRoute element={<Dashboard />} />}
           />
-
           <Route
             path="/t/:tenantSlug/invite"
             element={<TenantRoute element={<InviteListPage />} />}
           />
-
           <Route
             path="/t/:tenantSlug/settings"
             element={<TenantRoute element={<SettingsPage />} />}
           />
-
           <Route
             path="/t/:tenantSlug/region"
             element={<TenantRoute element={<RegionPage />} />}
           />
-
           <Route
             path="/t/:tenantSlug/departement"
             element={<TenantRoute element={<DepartementPage />} />}
           />
-
           <Route
             path="/t/:tenantSlug/secteur"
             element={<TenantRoute element={<SectorPage />} />}
           />
-
           <Route
             path="/t/:tenantSlug/village"
             element={<TenantRoute element={<VillagePage />} />}
@@ -150,7 +146,6 @@ const App: React.FC = () => {
             path="/t/:tenantSlug/surveys"
             element={<TenantRoute element={<SurveyListPage />} />}
           />
-
           <Route
             path="/t/:tenantSlug/surveys/:surveyId/questions"
             element={<TenantRoute element={<SurveyQuestionsPage />} />}
@@ -167,9 +162,41 @@ const App: React.FC = () => {
             path="/t/:tenantSlug/surveys/:surveyId/edit"
             element={<TenantRoute element={<SurveyEditPage />} />}
           />
+          <Route
+            path="/t/:tenantSlug/surveys/:surveyId/respondents"
+            element={<TenantRoute element={<RespondentListPage />} />}
+          />
+          <Route
+            path="/t/:tenantSlug/surveys/:surveyId/respondents/new"
+            element={<TenantRoute element={<RespondentCreatePage />} />}
+          />
+          <Route
+            path="/t/:tenantSlug/respondents/:respondentId"
+            element={<TenantRoute element={<RespondentDetailPage />} />}
+          />
+          <Route
+            path="/t/:tenantSlug/respondents/:respondentId/responses"
+            element={<TenantRoute element={<RespondentResponsePage />} />}
+          />
 
+          {/* <Route
+            path="/t/:tenantSlug/respondents/:respondentId/responses"
+            element={<RespondentResponsePage />}
+          /> */}
+          {/* <Route
+            path="/t/:tenantSlug/surveys/:surveyId/respondents"
+            element={<RespondentListPage />}
+          /> */}
+          {/* <Route
+            path="/t/:tenantSlug/surveys/:surveyId/respondents/new"
+            element={<RespondentCreatePage />} */}
+          {/* /> */}
+          {/* 
+          <Route
+            path="/t/:tenantSlug/respondents/:respondentId"
+            element={<RespondentDetailPage />}
+          /> */}
           {/* <Route path="/t/:slug/surveys" element={<SurveyListPage />} /> */}
-
           {/* ====================================== */}
           {/* Redirection par défaut */}
           {/* ====================================== */}

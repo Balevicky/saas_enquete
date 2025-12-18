@@ -26,6 +26,10 @@ const SurveyDetailPage = () => {
         <Link to={`/t/${tenantSlug}/surveys/${survey.id}/questions`}>
           🧩 Questions
         </Link>
+        |{" "}
+        <Link to={`/t/${tenantSlug}/surveys/${surveyId}/respondents/new`}>
+          ➕ Ajouter un participant
+        </Link>
       </div>
     </div>
   );

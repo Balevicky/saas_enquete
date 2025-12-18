@@ -11,6 +11,9 @@ export class RespondentController {
     try {
       const tenantId = (req as any).tenantId;
       const { surveyId } = req.params;
+      console.log("surveyId", surveyId);
+      console.log(" req.body", req.body);
+
       const { name, firstname, birthYear, villageId, externalId, metadata } =
         req.body;
 
