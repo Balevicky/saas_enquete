@@ -5,25 +5,21 @@ import SortableQuestionItem from "./SortableQuestionItem";
 interface Props {
   questions: Question[];
   onDelete: (id: string) => void;
+  onUpdate: (id: string, data: Partial<Question>) => void;
   disabled?: boolean;
-  renderExtra?: (question: Question) => React.ReactNode;
 }
-
-const QuestionList = ({
-  questions,
-  onDelete,
-  disabled,
-  renderExtra,
-}: Props) => {
+// console.log("id",id);
+//
+const QuestionList = ({ questions, onDelete, onUpdate, disabled }: Props) => {
   return (
-    <div>
+    <div className="list-group">
       {questions.map((q) => (
         <SortableQuestionItem
           key={q.id}
           question={q}
           onDelete={onDelete}
+          onUpdate={onUpdate}
           disabled={disabled}
-          renderExtra={renderExtra}
         />
       ))}
     </div>
@@ -31,6 +27,116 @@ const QuestionList = ({
 };
 
 export default QuestionList;
+
+// ================================================
+// import React from "react";
+// import { Question } from "../../services/questionService";
+// import SortableQuestionItem from "./SortableQuestionItem";
+
+// interface Props {
+//   questions: Question[];
+//   onDelete: (id: string) => void;
+//   disabled?: boolean;
+//   renderExtra?: (question: Question) => React.ReactNode;
+// }
+
+// const QuestionList = ({
+//   questions,
+//   onDelete,
+//   disabled,
+//   renderExtra,
+// }: Props) => {
+//   return (
+//     <div className="list-group">
+//       {questions.map((q) => (
+//         <SortableQuestionItem
+//           key={q.id}
+//           question={q}
+//           onDelete={onDelete}
+//           disabled={disabled}
+//           renderExtra={() => (
+//             <div className="mt-2">
+//               {/* Afficher options pour SINGLE / MULTIPLE_CHOICE */}
+//               {(q.type === "SINGLE_CHOICE" || q.type === "MULTIPLE_CHOICE") &&
+//                 q.options && (
+//                   <div className="mb-1">
+//                     <strong>Options:</strong>{" "}
+//                     {q.options.map((opt, i) => (
+//                       <span key={i} className="badge bg-secondary me-1">
+//                         {opt}
+//                       </span>
+//                     ))}
+//                   </div>
+//                 )}
+
+//               {/* Afficher config pour SCALE */}
+//               {q.type === "SCALE" && q.config && (
+//                 <div className="mb-1">
+//                   <strong>Échelle:</strong> {q.config.min} à {q.config.max}
+//                 </div>
+//               )}
+
+//               {/* Afficher nextMap pour condition SIMPLE */}
+//               {q.nextMap && Object.keys(q.nextMap).length > 0 && (
+//                 <div>
+//                   <strong>Logique conditionnelle SIMPLE:</strong>
+//                   <ul className="mb-0">
+//                     {Object.entries(q.nextMap).map(([answer, nextQId]) => (
+//                       <li key={answer}>
+//                         Si <code>{answer}</code> → question{" "}
+//                         <code>{nextQId}</code>
+//                       </li>
+//                     ))}
+//                   </ul>
+//                 </div>
+//               )}
+
+//               {/* Extra render si fourni */}
+//               {renderExtra && renderExtra(q)}
+//             </div>
+//           )}
+//         />
+//       ))}
+//     </div>
+//   );
+// };
+
+// export default QuestionList;
+
+// ==================================
+// import React from "react";
+// import { Question } from "../../services/questionService";
+// import SortableQuestionItem from "./SortableQuestionItem";
+
+// interface Props {
+//   questions: Question[];
+//   onDelete: (id: string) => void;
+//   disabled?: boolean;
+//   renderExtra?: (question: Question) => React.ReactNode;
+// }
+
+// const QuestionList = ({
+//   questions,
+//   onDelete,
+//   disabled,
+//   renderExtra,
+// }: Props) => {
+//   return (
+//     <div>
+//       {questions.map((q) => (
+//         <SortableQuestionItem
+//           key={q.id}
+//           question={q}
+//           onDelete={onDelete}
+//           disabled={disabled}
+//           renderExtra={renderExtra}
+//         />
+//       ))}
+//     </div>
+//   );
+// };
+
+// export default QuestionList;
 
 // ============================== PAS TROP BON
 // import React, { ReactNode } from "react";

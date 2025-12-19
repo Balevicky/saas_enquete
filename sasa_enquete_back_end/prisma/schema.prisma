@@ -203,6 +203,10 @@ model Question {
   type     QuestionType
   position Int
 
+options   Json?        // 👈 Choix possibles (SINGLE / MULTIPLE)
+  config    Json?        // 👈 Paramètres simples (SCALE, validations)
+  nextMap   Json?        // 👈 Condition SIMPLE (réponse → questionId)
+
   survey    Survey     @relation(fields: [surveyId], references: [id])
   tenant    Tenant     @relation(fields: [tenantId], references: [id])
   responses Response[]

@@ -1,3 +1,5 @@
+// // src/pages/questions/SurveyQuestionsPage.tsx
+// src/pages/questions/SurveyQuestionsPage.tsx
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
@@ -12,6 +14,10 @@ import surveyService, { Survey } from "../../services/surveyService";
 import QuestionForm from "../../components/questions/QuestionForm";
 import QuestionList from "../../components/questions/QuestionList";
 import { QuestionType } from "../../types/question";
+import QuestionDependencyGraph, {
+  Node,
+  Edge,
+} from "../../components/questions/QuestionDependencyGraph";
 
 const SurveyQuestionsPage = () => {
   const navigate = useNavigate();
@@ -27,11 +33,12 @@ const SurveyQuestionsPage = () => {
   const isAdvanced = survey?.mode === "ADVANCED";
 
   // ======================
-  // LOAD SURVEY + QUESTIONS
+  // LOAD
   // ======================
   const load = async () => {
     if (!tenantSlug || !surveyId) return;
     setLoading(true);
+
     try {
       const [surveyRes, questionsRes] = await Promise.all([
         surveyService.get(tenantSlug, surveyId),
@@ -39,10 +46,9 @@ const SurveyQuestionsPage = () => {
       ]);
 
       setSurvey(surveyRes);
-
-      // Trier par position
-      const sorted = questionsRes.data.sort((a, b) => a.position - b.position);
-      setQuestions(sorted);
+      setQuestions(
+        [...questionsRes.data].sort((a, b) => a.position - b.position)
+      );
     } finally {
       setLoading(false);
     }
@@ -53,17 +59,19 @@ const SurveyQuestionsPage = () => {
   }, [tenantSlug, surveyId]);
 
   // ======================
-  // CREATE QUESTION
+  // CREATE
   // ======================
   const createQuestion = async (data: {
     label: string;
     type: QuestionType;
+    options?: string[];
+    config?: { min: number; max: number };
+    nextMap?: Record<string, string>;
   }) => {
     if (!tenantSlug || !surveyId || isAdvanced) return;
 
     await questionService.create(tenantSlug, surveyId, {
-      label: data.label,
-      type: data.type,
+      ...data,
       position: questions.length + 1,
     });
 
@@ -71,17 +79,43 @@ const SurveyQuestionsPage = () => {
   };
 
   // ======================
-  // DELETE QUESTION
+  // UPDATE
+  // ======================
+  const updateQuestion = async (id: string, data: Partial<Question>) => {
+    if (!tenantSlug || !surveyId || isAdvanced) return;
+
+    await questionService.update(tenantSlug, surveyId, id, data);
+    load();
+  };
+
+  // ======================
+  // DELETE
   // ======================
   const deleteQuestion = async (id: string) => {
     if (!tenantSlug || !surveyId || isAdvanced) return;
 
     await questionService.remove(tenantSlug, surveyId, id);
-    load();
+
+    const res = await questionService.list(tenantSlug, surveyId);
+
+    const reordered = [...res.data]
+      .sort((a, b) => a.position - b.position)
+      .map((q, index) => ({
+        ...q,
+        position: index + 1,
+      }));
+
+    for (const q of reordered) {
+      await questionService.update(tenantSlug, surveyId, q.id, {
+        position: q.position,
+      });
+    }
+
+    setQuestions(reordered);
   };
 
   // ======================
-  // DRAG END
+  // DRAG & DROP
   // ======================
   const handleDragEnd = async (event: DragEndEvent) => {
     if (isAdvanced) return;
@@ -101,7 +135,6 @@ const SurveyQuestionsPage = () => {
 
     setQuestions(reordered);
 
-    // Persist
     for (const q of reordered) {
       await questionService.update(tenantSlug!, surveyId!, q.id, {
         position: q.position,
@@ -109,24 +142,54 @@ const SurveyQuestionsPage = () => {
     }
   };
 
-  if (loading) return <p>Chargement des questions...</p>;
+  if (loading) {
+    return <p className="p-3">Chargement des questions…</p>;
+  }
 
+  // ======================
+  // Nodes & Edges pour Cytoscape (robuste)
+  // ======================
+  const nodes: Node[] = questions.map((q) => ({
+    id: q.id,
+    label: q.label,
+  }));
+
+  const validEdges: Edge[] = [];
+  const invalidEdges: Edge[] = [];
+
+  questions.forEach((q) => {
+    if (!q.nextMap) return;
+
+    Object.entries(q.nextMap).forEach(([option, targetId]) => {
+      if (targetId && questions.find((n) => n.id === targetId)) {
+        validEdges.push({ source: q.id, target: targetId, label: option });
+      } else {
+        invalidEdges.push({
+          source: q.id,
+          target: targetId || "",
+          label: option,
+        });
+      }
+    });
+  });
+
+  const edges = [...validEdges, ...invalidEdges];
+
+  // ======================
+  // RENDER
+  // ======================
   return (
-    <div style={{ padding: 24 }}>
-      <h2>🧩 Questions du survey</h2>
+    <div className="p-3">
+      <h2 className="mb-3">🧩 Questions du survey</h2>
 
       {isAdvanced && (
-        <div
-          style={{
-            padding: 16,
-            background: "#f8d7da",
-            border: "1px solid #f5c2c7",
-            marginBottom: 20,
-          }}
-        >
+        <div className="alert alert-danger">
           <strong>🚫 Mode avancé</strong>
-          <p>Les questions sont gérées via le Survey Builder</p>
+          <p className="mb-2">
+            Les questions sont gérées via le Survey Builder
+          </p>
           <button
+            className="btn btn-light"
             onClick={() =>
               navigate(`/t/${tenantSlug}/surveys/${surveyId}/builder`)
             }
@@ -136,7 +199,11 @@ const SurveyQuestionsPage = () => {
         </div>
       )}
 
-      {!isAdvanced && <QuestionForm onSubmit={createQuestion} />}
+      {!isAdvanced && (
+        <div className="mb-4">
+          <QuestionForm onSubmit={createQuestion} />
+        </div>
+      )}
 
       <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext
@@ -146,15 +213,912 @@ const SurveyQuestionsPage = () => {
           <QuestionList
             questions={questions}
             onDelete={deleteQuestion}
+            onUpdate={updateQuestion}
             disabled={isAdvanced}
           />
         </SortableContext>
       </DndContext>
+
+      {/* <div className="mt-4 p-3 border rounded" style={{ height: "400px" }}>
+        {questions.length > 0 && (
+          <QuestionDependencyGraph nodes={nodes} edges={edges} />
+        )}
+      </div> */}
     </div>
   );
 };
 
 export default SurveyQuestionsPage;
+
+// ====================================
+// import { useEffect, useState } from "react";
+// import { useNavigate, useParams } from "react-router-dom";
+// import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
+// import {
+//   SortableContext,
+//   verticalListSortingStrategy,
+//   arrayMove,
+// } from "@dnd-kit/sortable";
+
+// import questionService, { Question } from "../../services/questionService";
+// import surveyService, { Survey } from "../../services/surveyService";
+// import QuestionForm from "../../components/questions/QuestionForm";
+// import QuestionList from "../../components/questions/QuestionList";
+// import { QuestionType } from "../../types/question";
+// import QuestionDependencyGraph, {
+//   Node,
+//   Edge,
+// } from "../../components/questions/QuestionDependencyGraph";
+
+// const SurveyQuestionsPage = () => {
+//   const navigate = useNavigate();
+//   const { tenantSlug, surveyId } = useParams<{
+//     tenantSlug: string;
+//     surveyId: string;
+//   }>();
+
+//   const [survey, setSurvey] = useState<Survey | null>(null);
+//   const [questions, setQuestions] = useState<Question[]>([]);
+//   const [loading, setLoading] = useState(true);
+
+//   const isAdvanced = survey?.mode === "ADVANCED";
+
+//   // ======================
+//   // LOAD
+//   // ======================
+//   const load = async () => {
+//     if (!tenantSlug || !surveyId) return;
+//     setLoading(true);
+
+//     try {
+//       const [surveyRes, questionsRes] = await Promise.all([
+//         surveyService.get(tenantSlug, surveyId),
+//         questionService.list(tenantSlug, surveyId),
+//       ]);
+
+//       setSurvey(surveyRes);
+//       setQuestions(
+//         [...questionsRes.data].sort((a, b) => a.position - b.position)
+//       );
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   useEffect(() => {
+//     load();
+//   }, [tenantSlug, surveyId]);
+
+//   // ======================
+//   // CREATE
+//   // ======================
+//   const createQuestion = async (data: {
+//     label: string;
+//     type: QuestionType;
+//     options?: string[];
+//     config?: { min: number; max: number };
+//     nextMap?: Record<string, string>;
+//   }) => {
+//     if (!tenantSlug || !surveyId || isAdvanced) return;
+
+//     await questionService.create(tenantSlug, surveyId, {
+//       ...data,
+//       position: questions.length + 1,
+//     });
+
+//     load();
+//   };
+
+//   // ======================
+//   // UPDATE
+//   // ======================
+//   const updateQuestion = async (id: string, data: Partial<Question>) => {
+//     if (!tenantSlug || !surveyId || isAdvanced) return;
+
+//     await questionService.update(tenantSlug, surveyId, id, data);
+//     load();
+//   };
+
+//   // ======================
+//   // DELETE
+//   // ======================
+//   const deleteQuestion = async (id: string) => {
+//     if (!tenantSlug || !surveyId || isAdvanced) return;
+
+//     await questionService.remove(tenantSlug, surveyId, id);
+
+//     const res = await questionService.list(tenantSlug, surveyId);
+
+//     const reordered = [...res.data]
+//       .sort((a, b) => a.position - b.position)
+//       .map((q, index) => ({
+//         ...q,
+//         position: index + 1,
+//       }));
+
+//     for (const q of reordered) {
+//       await questionService.update(tenantSlug, surveyId, q.id, {
+//         position: q.position,
+//       });
+//     }
+
+//     setQuestions(reordered);
+//   };
+
+//   // ======================
+//   // DRAG & DROP
+//   // ======================
+//   const handleDragEnd = async (event: DragEndEvent) => {
+//     if (isAdvanced) return;
+
+//     const { active, over } = event;
+//     if (!over || active.id === over.id) return;
+
+//     const oldIndex = questions.findIndex((q) => q.id === active.id);
+//     const newIndex = questions.findIndex((q) => q.id === over.id);
+
+//     const reordered = arrayMove(questions, oldIndex, newIndex).map(
+//       (q, idx) => ({
+//         ...q,
+//         position: idx + 1,
+//       })
+//     );
+
+//     setQuestions(reordered);
+
+//     for (const q of reordered) {
+//       await questionService.update(tenantSlug!, surveyId!, q.id, {
+//         position: q.position,
+//       });
+//     }
+//   };
+
+//   if (loading) {
+//     return <p className="p-3">Chargement des questions…</p>;
+//   }
+
+//   // ======================
+//   // Nodes & Edges pour Cytoscape
+//   // ======================
+//   const nodes: Node[] = questions.map((q) => ({
+//     id: q.id,
+//     label: q.label,
+//   }));
+
+//   const edges: Edge[] = questions.flatMap((q) =>
+//     q.nextMap
+//       ? Object.entries(q.nextMap).map(([option, targetId]) => ({
+//           source: q.id,
+//           target: targetId,
+//           label: option,
+//         }))
+//       : []
+//   );
+
+//   return (
+//     <div className="p-3">
+//       <h2 className="mb-3">🧩 Questions du survey</h2>
+
+//       {isAdvanced && (
+//         <div className="alert alert-danger">
+//           <strong>🚫 Mode avancé</strong>
+//           <p className="mb-2">
+//             Les questions sont gérées via le Survey Builder
+//           </p>
+//           <button
+//             className="btn btn-light"
+//             onClick={() =>
+//               navigate(`/t/${tenantSlug}/surveys/${surveyId}/builder`)
+//             }
+//           >
+//             Ouvrir le Builder
+//           </button>
+//         </div>
+//       )}
+
+//       {!isAdvanced && (
+//         <div className="mb-4">
+//           <QuestionForm onSubmit={createQuestion} />
+//         </div>
+//       )}
+
+//       <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+//         <SortableContext
+//           items={questions.map((q) => q.id)}
+//           strategy={verticalListSortingStrategy}
+//         >
+//           <QuestionList
+//             questions={questions}
+//             onDelete={deleteQuestion}
+//             onUpdate={updateQuestion}
+//             disabled={isAdvanced}
+//           />
+//         </SortableContext>
+//       </DndContext>
+
+//       <div className="mt-4 p-3 border rounded" style={{ height: "400px" }}>
+//         {questions.length > 0 && (
+//           <QuestionDependencyGraph nodes={nodes} edges={edges} />
+//         )}
+//       </div>
+//     </div>
+//   );
+// };
+
+// export default SurveyQuestionsPage;
+
+// ================================================
+// import { useEffect, useState } from "react";
+// import { useNavigate, useParams } from "react-router-dom";
+// import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
+// import {
+//   SortableContext,
+//   verticalListSortingStrategy,
+//   arrayMove,
+// } from "@dnd-kit/sortable";
+
+// import questionService, { Question } from "../../services/questionService";
+// import surveyService, { Survey } from "../../services/surveyService";
+// import QuestionForm from "../../components/questions/QuestionForm";
+// import QuestionList from "../../components/questions/QuestionList";
+// import { QuestionType } from "../../types/question";
+// import QuestionDependencyGraph from "../../components/questions/QuestionDependencyGraph";
+
+// const SurveyQuestionsPage = () => {
+//   const navigate = useNavigate();
+//   const { tenantSlug, surveyId } = useParams<{
+//     tenantSlug: string;
+//     surveyId: string;
+//   }>();
+
+//   const [survey, setSurvey] = useState<Survey | null>(null);
+//   const [questions, setQuestions] = useState<Question[]>([]);
+//   const [loading, setLoading] = useState(true);
+
+//   const isAdvanced = survey?.mode === "ADVANCED";
+
+//   // ======================
+//   // LOAD
+//   // ======================
+//   const load = async () => {
+//     if (!tenantSlug || !surveyId) return;
+//     setLoading(true);
+
+//     try {
+//       const [surveyRes, questionsRes] = await Promise.all([
+//         surveyService.get(tenantSlug, surveyId),
+//         questionService.list(tenantSlug, surveyId),
+//       ]);
+
+//       setSurvey(surveyRes);
+//       setQuestions(
+//         [...questionsRes.data].sort((a, b) => a.position - b.position)
+//       );
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   useEffect(() => {
+//     load();
+//   }, [tenantSlug, surveyId]);
+
+//   // ======================
+//   // CREATE
+//   // ======================
+//   const createQuestion = async (data: {
+//     label: string;
+//     type: QuestionType;
+//     options?: string[];
+//     config?: { min: number; max: number };
+//     nextMap?: Record<string, string>;
+//   }) => {
+//     if (!tenantSlug || !surveyId || isAdvanced) return;
+
+//     await questionService.create(tenantSlug, surveyId, {
+//       ...data,
+//       position: questions.length + 1,
+//     });
+
+//     load();
+//   };
+
+//   // ======================
+//   // UPDATE
+//   // ======================
+//   const updateQuestion = async (id: string, data: Partial<Question>) => {
+//     if (!tenantSlug || !surveyId || isAdvanced) return;
+
+//     await questionService.update(tenantSlug, surveyId, id, data);
+//     load();
+//   };
+
+//   // ======================
+//   // DELETE
+//   // ======================
+//   // const deleteQuestion = async (id: string) => {
+//   //   if (!tenantSlug || !surveyId || isAdvanced) return;
+
+//   //   await questionService.remove(tenantSlug, surveyId, id);
+//   //   load();
+//   // };
+//   const deleteQuestion = async (id: string) => {
+//     if (!tenantSlug || !surveyId || isAdvanced) return;
+
+//     // 1️⃣ Supprimer la question
+//     await questionService.remove(tenantSlug, surveyId, id);
+
+//     // 2️⃣ Recharger les questions
+//     const res = await questionService.list(tenantSlug, surveyId);
+
+//     // 3️⃣ Recalculer les positions
+//     const reordered = [...res.data]
+//       .sort((a, b) => a.position - b.position)
+//       .map((q, index) => ({
+//         ...q,
+//         position: index + 1,
+//       }));
+
+//     // 4️⃣ Mettre à jour les positions en base
+//     for (const q of reordered) {
+//       await questionService.update(tenantSlug, surveyId, q.id, {
+//         position: q.position,
+//       });
+//     }
+
+//     // 5️⃣ Mettre à jour le state
+//     setQuestions(reordered);
+//   };
+
+//   // ======================
+//   // DRAG & DROP
+//   // ======================
+//   const handleDragEnd = async (event: DragEndEvent) => {
+//     if (isAdvanced) return;
+
+//     const { active, over } = event;
+//     if (!over || active.id === over.id) return;
+
+//     const oldIndex = questions.findIndex((q) => q.id === active.id);
+//     const newIndex = questions.findIndex((q) => q.id === over.id);
+
+//     const reordered = arrayMove(questions, oldIndex, newIndex).map(
+//       (q, idx) => ({
+//         ...q,
+//         position: idx + 1,
+//       })
+//     );
+
+//     setQuestions(reordered);
+
+//     for (const q of reordered) {
+//       await questionService.update(tenantSlug!, surveyId!, q.id, {
+//         position: q.position,
+//       });
+//     }
+//   };
+
+//   if (loading) {
+//     return <p className="p-3">Chargement des questions…</p>;
+//   }
+
+//   return (
+//     <div className="p-3">
+//       <h2 className="mb-3">🧩 Questions du survey</h2>
+
+//       {isAdvanced && (
+//         <div className="alert alert-danger">
+//           <strong>🚫 Mode avancé</strong>
+//           <p className="mb-2">
+//             Les questions sont gérées via le Survey Builder
+//           </p>
+//           <button
+//             className="btn btn-light"
+//             onClick={() =>
+//               navigate(`/t/${tenantSlug}/surveys/${surveyId}/builder`)
+//             }
+//           >
+//             Ouvrir le Builder
+//           </button>
+//         </div>
+//       )}
+
+//       {!isAdvanced && (
+//         <div className="mb-4">
+//           <QuestionForm onSubmit={createQuestion} />
+//         </div>
+//       )}
+
+//       <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+//         <SortableContext
+//           items={questions.map((q) => q.id)}
+//           strategy={verticalListSortingStrategy}
+//         >
+//           <QuestionList
+//             questions={questions}
+//             onDelete={deleteQuestion}
+//             onUpdate={updateQuestion}
+//             disabled={isAdvanced}
+//           />
+//         </SortableContext>
+//       </DndContext>
+//       <div className="mt-4 p-3 border rounded" style={{ height: "400px" }}>
+//         <QuestionDependencyGraph questions={questions} />
+//       </div>
+//     </div>
+//   );
+// };
+
+// export default SurveyQuestionsPage;
+
+// ===========================================
+// import { useEffect, useState } from "react";
+// import { useNavigate, useParams } from "react-router-dom";
+// import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
+// import {
+//   SortableContext,
+//   verticalListSortingStrategy,
+//   arrayMove,
+// } from "@dnd-kit/sortable";
+
+// import questionService, { Question } from "../../services/questionService";
+// import surveyService, { Survey } from "../../services/surveyService";
+// import QuestionForm from "../../components/questions/QuestionForm";
+// import QuestionList from "../../components/questions/QuestionList";
+// import { QuestionType } from "../../types/question";
+
+// const SurveyQuestionsPage = () => {
+//   const navigate = useNavigate();
+//   const { tenantSlug, surveyId } = useParams<{
+//     tenantSlug: string;
+//     surveyId: string;
+//   }>();
+
+//   const [survey, setSurvey] = useState<Survey | null>(null);
+//   const [questions, setQuestions] = useState<Question[]>([]);
+//   const [loading, setLoading] = useState(true);
+
+//   const isAdvanced = survey?.mode === "ADVANCED";
+
+//   const load = async () => {
+//     if (!tenantSlug || !surveyId) return;
+//     setLoading(true);
+//     try {
+//       const [surveyRes, questionsRes] = await Promise.all([
+//         surveyService.get(tenantSlug, surveyId),
+//         questionService.list(tenantSlug, surveyId),
+//       ]);
+
+//       setSurvey(surveyRes);
+//       setQuestions(questionsRes.data.sort((a, b) => a.position - b.position));
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   useEffect(() => {
+//     load();
+//   }, [tenantSlug, surveyId]);
+
+//   const createQuestion = async (data: {
+//     label: string;
+//     type: QuestionType;
+//     options?: string[];
+//     config?: { min: number; max: number };
+//     nextMap?: Record<string, string>;
+//   }) => {
+//     if (!tenantSlug || !surveyId || isAdvanced) return;
+
+//     await questionService.create(tenantSlug, surveyId, {
+//       ...data,
+//       position: questions.length + 1,
+//     });
+//     load();
+//   };
+
+//   const deleteQuestion = async (id: string) => {
+//     console.log("id", id);
+
+//     if (!tenantSlug || !surveyId || isAdvanced) return;
+//     await questionService.remove(tenantSlug, surveyId, id);
+//     load();
+//   };
+
+//   const handleDragEnd = async (event: DragEndEvent) => {
+//     if (isAdvanced) return;
+//     const { active, over } = event;
+//     if (!over || active.id === over.id) return;
+
+//     const oldIndex = questions.findIndex((q) => q.id === active.id);
+//     const newIndex = questions.findIndex((q) => q.id === over.id);
+
+//     const reordered = arrayMove(questions, oldIndex, newIndex).map(
+//       (q, idx) => ({
+//         ...q,
+//         position: idx + 1,
+//       })
+//     );
+
+//     setQuestions(reordered);
+
+//     for (const q of reordered) {
+//       await questionService.update(tenantSlug!, surveyId!, q.id, {
+//         position: q.position,
+//       });
+//     }
+//   };
+//   const updateQuestion = async (id: string, data: Partial<Question>) => {
+//     if (!tenantSlug || !surveyId || isAdvanced) return;
+
+//     await questionService.update(tenantSlug, surveyId, id, data);
+//     load();
+//   };
+
+//   if (loading) return <p>Chargement des questions...</p>;
+
+//   return (
+//     <div className="p-3">
+//       <h2>🧩 Questions du survey</h2>
+
+//       {isAdvanced && (
+//         <div className="p-3 mb-3 bg-danger text-white rounded">
+//           <strong>🚫 Mode avancé</strong>
+//           <p>Les questions sont gérées via le Survey Builder</p>
+//           <button
+//             className="btn btn-light"
+//             onClick={() =>
+//               navigate(`/t/${tenantSlug}/surveys/${surveyId}/builder`)
+//             }
+//           >
+//             Ouvrir le Builder
+//           </button>
+//         </div>
+//       )}
+
+//       {!isAdvanced && <QuestionForm onSubmit={createQuestion} />}
+
+//       <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+//         <SortableContext
+//           items={questions.map((q) => q.id)}
+//           strategy={verticalListSortingStrategy}
+//         >
+//           <QuestionList
+//             // questions={questions}
+//             // onDelete={deleteQuestion}
+//             // disabled={isAdvanced}
+//             questions={questions}
+//             onDelete={deleteQuestion}
+//             onUpdate={updateQuestion}
+//             disabled={isAdvanced}
+//           />
+//         </SortableContext>
+//       </DndContext>
+//     </div>
+//   );
+// };
+
+// export default SurveyQuestionsPage;
+
+// ================================================
+// import { useEffect, useState } from "react";
+// import { useNavigate, useParams } from "react-router-dom";
+// import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
+// import {
+//   SortableContext,
+//   verticalListSortingStrategy,
+//   arrayMove,
+// } from "@dnd-kit/sortable";
+
+// import questionService, { Question } from "../../services/questionService";
+// import surveyService, { Survey } from "../../services/surveyService";
+// import QuestionForm from "../../components/questions/QuestionForm";
+// import QuestionList from "../../components/questions/QuestionList";
+// import { QuestionType } from "../../types/question";
+
+// const SurveyQuestionsPage = () => {
+//   const navigate = useNavigate();
+//   const { tenantSlug, surveyId } = useParams<{
+//     tenantSlug: string;
+//     surveyId: string;
+//   }>();
+
+//   const [survey, setSurvey] = useState<Survey | null>(null);
+//   const [questions, setQuestions] = useState<Question[]>([]);
+//   const [loading, setLoading] = useState(true);
+
+//   const isAdvanced = survey?.mode === "ADVANCED";
+
+//   // ======================
+//   // LOAD SURVEY + QUESTIONS
+//   // ======================
+//   const load = async () => {
+//     if (!tenantSlug || !surveyId) return;
+//     setLoading(true);
+//     try {
+//       const [surveyRes, questionsRes] = await Promise.all([
+//         surveyService.get(tenantSlug, surveyId),
+//         questionService.list(tenantSlug, surveyId),
+//       ]);
+
+//       setSurvey(surveyRes);
+
+//       const sorted = questionsRes.data.sort((a, b) => a.position - b.position);
+//       setQuestions(sorted);
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   useEffect(() => {
+//     load();
+//   }, [tenantSlug, surveyId]);
+
+//   // ======================
+//   // CREATE QUESTION
+//   // ======================
+//   const createQuestion = async (data: {
+//     label: string;
+//     type: QuestionType;
+//     position: number;
+//     options?: string[];
+//     config?: { min: number; max: number };
+//     nextMap?: Record<string, string>;
+//   }) => {
+//     if (!tenantSlug || !surveyId || isAdvanced) return;
+
+//     await questionService.create(tenantSlug, surveyId, {
+//       label: data.label,
+//       type: data.type,
+//       position: data.position,
+//       options: data.options,
+//       config: data.config,
+//       nextMap: data.nextMap,
+//     });
+
+//     load();
+//   };
+
+//   // ======================
+//   // DELETE QUESTION
+//   // ======================
+//   const deleteQuestion = async (id: string) => {
+//     if (!tenantSlug || !surveyId || isAdvanced) return;
+
+//     await questionService.remove(tenantSlug, surveyId, id);
+//     load();
+//   };
+
+//   // ======================
+//   // DRAG END
+//   // ======================
+//   const handleDragEnd = async (event: DragEndEvent) => {
+//     if (isAdvanced) return;
+
+//     const { active, over } = event;
+//     if (!over || active.id === over.id) return;
+
+//     const oldIndex = questions.findIndex((q) => q.id === active.id);
+//     const newIndex = questions.findIndex((q) => q.id === over.id);
+
+//     const reordered = arrayMove(questions, oldIndex, newIndex).map(
+//       (q, idx) => ({
+//         ...q,
+//         position: idx + 1,
+//       })
+//     );
+
+//     setQuestions(reordered);
+
+//     // Persist positions
+//     for (const q of reordered) {
+//       await questionService.update(tenantSlug!, surveyId!, q.id, {
+//         position: q.position,
+//       });
+//     }
+//   };
+
+//   if (loading) return <p>Chargement des questions...</p>;
+
+//   return (
+//     <div className="p-3">
+//       <h2>🧩 Questions du survey</h2>
+
+//       {isAdvanced && (
+//         <div
+//           className="p-3 mb-3 border rounded"
+//           style={{ background: "#f8d7da", borderColor: "#f5c2c7" }}
+//         >
+//           <strong>🚫 Mode avancé</strong>
+//           <p>Les questions sont gérées via le Survey Builder</p>
+//           <button
+//             className="btn btn-outline-dark"
+//             onClick={() =>
+//               navigate(`/t/${tenantSlug}/surveys/${surveyId}/builder`)
+//             }
+//           >
+//             Ouvrir le Builder
+//           </button>
+//         </div>
+//       )}
+
+//       {!isAdvanced && <QuestionForm onSubmit={createQuestion} />}
+
+//       <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+//         <SortableContext
+//           items={questions.map((q) => q.id)}
+//           strategy={verticalListSortingStrategy}
+//         >
+//           <QuestionList
+//             questions={questions}
+//             onDelete={deleteQuestion}
+//             disabled={isAdvanced}
+//           />
+//         </SortableContext>
+//       </DndContext>
+//     </div>
+//   );
+// };
+
+// export default SurveyQuestionsPage;
+
+// =============================================
+// import { useEffect, useState } from "react";
+// import { useNavigate, useParams } from "react-router-dom";
+// import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
+// import {
+//   SortableContext,
+//   verticalListSortingStrategy,
+//   arrayMove,
+// } from "@dnd-kit/sortable";
+
+// import questionService, { Question } from "../../services/questionService";
+// import surveyService, { Survey } from "../../services/surveyService";
+// import QuestionForm from "../../components/questions/QuestionForm";
+// import QuestionList from "../../components/questions/QuestionList";
+// import { QuestionType } from "../../types/question";
+
+// const SurveyQuestionsPage = () => {
+//   const navigate = useNavigate();
+//   const { tenantSlug, surveyId } = useParams<{
+//     tenantSlug: string;
+//     surveyId: string;
+//   }>();
+
+//   const [survey, setSurvey] = useState<Survey | null>(null);
+//   const [questions, setQuestions] = useState<Question[]>([]);
+//   const [loading, setLoading] = useState(true);
+
+//   const isAdvanced = survey?.mode === "ADVANCED";
+
+//   // ======================
+//   // LOAD SURVEY + QUESTIONS
+//   // ======================
+//   const load = async () => {
+//     if (!tenantSlug || !surveyId) return;
+//     setLoading(true);
+//     try {
+//       const [surveyRes, questionsRes] = await Promise.all([
+//         surveyService.get(tenantSlug, surveyId),
+//         questionService.list(tenantSlug, surveyId),
+//       ]);
+
+//       setSurvey(surveyRes);
+
+//       // Trier par position
+//       const sorted = questionsRes.data.sort((a, b) => a.position - b.position);
+//       setQuestions(sorted);
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   useEffect(() => {
+//     load();
+//   }, [tenantSlug, surveyId]);
+
+//   // ======================
+//   // CREATE QUESTION
+//   // ======================
+//   const createQuestion = async (data: {
+//     label: string;
+//     type: QuestionType;
+//   }) => {
+//     if (!tenantSlug || !surveyId || isAdvanced) return;
+
+//     await questionService.create(tenantSlug, surveyId, {
+//       label: data.label,
+//       type: data.type,
+//       position: questions.length + 1,
+//     });
+
+//     load();
+//   };
+
+//   // ======================
+//   // DELETE QUESTION
+//   // ======================
+//   const deleteQuestion = async (id: string) => {
+//     if (!tenantSlug || !surveyId || isAdvanced) return;
+
+//     await questionService.remove(tenantSlug, surveyId, id);
+//     load();
+//   };
+
+//   // ======================
+//   // DRAG END
+//   // ======================
+//   const handleDragEnd = async (event: DragEndEvent) => {
+//     if (isAdvanced) return;
+
+//     const { active, over } = event;
+//     if (!over || active.id === over.id) return;
+
+//     const oldIndex = questions.findIndex((q) => q.id === active.id);
+//     const newIndex = questions.findIndex((q) => q.id === over.id);
+
+//     const reordered = arrayMove(questions, oldIndex, newIndex).map(
+//       (q, idx) => ({
+//         ...q,
+//         position: idx + 1,
+//       })
+//     );
+
+//     setQuestions(reordered);
+
+//     // Persist
+//     for (const q of reordered) {
+//       await questionService.update(tenantSlug!, surveyId!, q.id, {
+//         position: q.position,
+//       });
+//     }
+//   };
+
+//   if (loading) return <p>Chargement des questions...</p>;
+
+//   return (
+//     <div style={{ padding: 24 }}>
+//       <h2>🧩 Questions du survey</h2>
+
+//       {isAdvanced && (
+//         <div
+//           style={{
+//             padding: 16,
+//             background: "#f8d7da",
+//             border: "1px solid #f5c2c7",
+//             marginBottom: 20,
+//           }}
+//         >
+//           <strong>🚫 Mode avancé</strong>
+//           <p>Les questions sont gérées via le Survey Builder</p>
+//           <button
+//             onClick={() =>
+//               navigate(`/t/${tenantSlug}/surveys/${surveyId}/builder`)
+//             }
+//           >
+//             Ouvrir le Builder
+//           </button>
+//         </div>
+//       )}
+
+//       {!isAdvanced && <QuestionForm onSubmit={createQuestion} />}
+
+//       <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+//         <SortableContext
+//           items={questions.map((q) => q.id)}
+//           strategy={verticalListSortingStrategy}
+//         >
+//           <QuestionList
+//             questions={questions}
+//             onDelete={deleteQuestion}
+//             disabled={isAdvanced}
+//           />
+//         </SortableContext>
+//       </DndContext>
+//     </div>
+//   );
+// };
+
+// export default SurveyQuestionsPage;
 
 // ============================
 // import { useEffect, useState } from "react";
