@@ -24,7 +24,7 @@ const QuestionPreview = ({
             type="text"
             className="form-control"
             placeholder="Réponse..."
-            disabled
+            // disabled
           />
         )}
 
@@ -32,7 +32,7 @@ const QuestionPreview = ({
           <textarea
             className="form-control"
             placeholder="Réponse..."
-            disabled
+            // disabled
           />
         )}
 
@@ -48,7 +48,7 @@ const QuestionPreview = ({
                 type={type === "SINGLE_CHOICE" ? "radio" : "checkbox"}
                 name="preview"
                 id={`opt-${i}`}
-                disabled
+                // disabled
               />
               <label className="form-check-label" htmlFor={`opt-${i}`}>
                 {opt}
@@ -62,7 +62,7 @@ const QuestionPreview = ({
             className="form-range"
             min={config?.min ?? 1}
             max={config?.max ?? 5}
-            disabled
+            // disabled
           />
         )}
 
@@ -77,7 +77,7 @@ const QuestionPreview = ({
             type="email"
             className="form-control"
             placeholder="exemple@email.com"
-            disabled
+            // disabled
           />
         )}
 
@@ -86,7 +86,7 @@ const QuestionPreview = ({
             type="tel"
             className="form-control"
             placeholder="+245 xx xxx xxxx"
-            disabled
+            // disabled
           />
         )}
       </div>

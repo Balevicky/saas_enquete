@@ -25,6 +25,7 @@ model Tenant {
   respondents         Respondent[]
   questions           Question[]
   surveyResponses     SurveyResponse[]
+  sections     Section[]
   passwordResetTokens PasswordResetToken[]
   createdAt           DateTime             @default(now())
 }
@@ -126,6 +127,7 @@ model Survey {
   creator     User             @relation("SurveyCreator", fields: [createdBy], references: [id])
   tenant      Tenant           @relation(fields: [tenantId], references: [id])
   responses   SurveyResponse[]
+  sections     Section[]
   status      SurveyStatus     @default(DRAFT)
   mode        SurveyMode       @default(SIMPLE)
 
@@ -198,17 +200,18 @@ model Question {
   id       String       @id @default(cuid())
   surveyId String
   tenantId String
+  sectionId String?      // 🆕 SECTION
   name      String
   label    String
   type     QuestionType
   position Int
-
 options   Json?        // 👈 Choix possibles (SINGLE / MULTIPLE)
   config    Json?        // 👈 Paramètres simples (SCALE, validations)
   nextMap   Json?        // 👈 Condition SIMPLE (réponse → questionId)
 
   survey    Survey     @relation(fields: [surveyId], references: [id])
   tenant    Tenant     @relation(fields: [tenantId], references: [id])
+   section   Section?   @relation(fields: [sectionId], references: [id], onDelete: SetNull)
   responses Response[]
 
   @@unique([id, tenantId])
@@ -249,6 +252,25 @@ model Invite {
   tenant    Tenant   @relation(fields: [tenantId], references: [id])
 
   @@unique([email, tenantId])
+}
+model Section {
+  id          String   @id @default(cuid())
+  surveyId    String
+  tenantId    String
+  title       String
+  description String?
+  position    Int
+
+  survey      Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  questions   Question[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([id, tenantId])
+  @@index([surveyId])
+  @@index([tenantId])
 }
 
 model PasswordResetToken {

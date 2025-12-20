@@ -1,10 +1,11 @@
-// ===================================== BON avec confirmation à la supression avec css avec validation pas changement couleur de fond pour la question en Drag&drop
+// src/components/questions/SortableQuestionItem.tsx
 import React, { useEffect, useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Question } from "../../services/questionService";
 import { QuestionType } from "../../types/question";
-import "./SortableQuestionItem.css"; // CSS fade modal
+import QuestionPreview from "./QuestionPreview"; // ✅ AJOUT
+import "./SortableQuestionItem.css";
 
 interface Props {
   question: Question;
@@ -33,22 +34,28 @@ const SortableQuestionItem: React.FC<Props> = ({
   onUpdate,
   disabled,
 }) => {
-  const { attributes, listeners, setNodeRef, transform, transition } =
-    useSortable({ id: question.id });
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: question.id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
+    backgroundColor: isDragging ? "#e0f7fa" : "white", // ← couleur pendant drag
   };
 
   const [isEditing, setIsEditing] = useState(false);
+  const [showPreview, setShowPreview] = useState(false); // ✅ AJOUT
   const [showModal, setShowModal] = useState(false);
-  const [label, setLabel] = useState<string>(question.label);
+  const [label, setLabel] = useState(question.label);
   const [type, setType] = useState<QuestionType>(question.type);
   const [options, setOptions] = useState<string[]>(question.options || []);
-  const [config, setConfig] = useState<
-    { min: number; max: number } | undefined
-  >(question.config);
+  const [config, setConfig] = useState(question.config);
   const [nextMap, setNextMap] = useState<Record<string, string>>(
     question.nextMap || {}
   );
@@ -64,7 +71,8 @@ const SortableQuestionItem: React.FC<Props> = ({
       setNextMap({});
       return;
     }
-    setNextMap((prev: Record<string, string>) => {
+
+    setNextMap((prev) => {
       const cleaned: Record<string, string> = {};
       options.forEach((opt) => {
         if (opt.trim()) cleaned[opt] = prev[opt] || "";
@@ -73,7 +81,7 @@ const SortableQuestionItem: React.FC<Props> = ({
     });
   }, [options, type]);
 
-  // Fermeture automatique du toast après 3s
+  // Auto close toast
   useEffect(() => {
     if (toast) {
       const timer = setTimeout(() => setToast(null), 3000);
@@ -81,23 +89,23 @@ const SortableQuestionItem: React.FC<Props> = ({
     }
   }, [toast]);
 
-  // Validation du formulaire
   const validate = (): boolean => {
     const newErrors: string[] = [];
 
-    if (!label.trim()) newErrors.push("Le libellé de la question est requis.");
+    if (!label.trim()) newErrors.push("Le libellé est requis.");
 
     if (type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE") {
-      const filledOptions = options.filter((o) => o.trim() !== "");
+      const filledOptions = options.filter((o) => o.trim());
       if (filledOptions.length === 0)
         newErrors.push("Au moins une option est requise.");
-      filledOptions.forEach((opt, idx) => {
-        if (!opt.trim()) newErrors.push(`Option ${idx + 1} est vide.`);
-      });
 
-      // Vérifier que nextMap ne pointe pas vers une question inexistante
       Object.entries(nextMap).forEach(([opt, qid]) => {
-        if (qid && !allQuestions.find((q) => q.id === qid)) {
+        if (
+          qid &&
+          !allQuestions.find(
+            (q) => q.id === qid && q.position > question.position
+          )
+        ) {
           newErrors.push(
             `L'option "${opt}" pointe vers une question invalide.`
           );
@@ -107,7 +115,7 @@ const SortableQuestionItem: React.FC<Props> = ({
 
     setErrors(newErrors);
 
-    if (newErrors.length > 0) {
+    if (newErrors.length) {
       setToast({ message: newErrors.join(" "), type: "danger" });
       return false;
     }
@@ -115,48 +123,20 @@ const SortableQuestionItem: React.FC<Props> = ({
     return true;
   };
 
-  // const handleSave = () => {
-  //   if (!validate()) return;
-
-  //   const payload: Partial<Question> = {
-  //     label,
-  //     type,
-  //     options,
-  //     config,
-  //     nextMap: type === "SINGLE_CHOICE" ? nextMap : {},
-  //     position: question.position, // 🔹 ajouter ici
-  //   };
-
-  //   try {
-  //     onUpdate(question.id, payload);
-  //     setIsEditing(false);
-  //     setErrors([]);
-  //     setToast({
-  //       message: "Question sauvegardée avec succès !",
-  //       type: "success",
-  //     });
-  //   } catch (error) {
-  //     setToast({ message: "Erreur lors de la sauvegarde", type: "danger" });
-  //   }
-  // };
   const handleSave = () => {
     if (!validate()) return;
 
-    // Commencer avec les champs de base
     const payload: Partial<Question> = {
       label,
       type,
       config,
-      position: question.position, // 🔹 obligatoire pour le serveur
+      position: question.position,
     };
 
-    // Ajouter options si le type le nécessite
     if (type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE") {
-      const cleanedOptions = options.filter((o) => o.trim() !== "");
-      payload.options = cleanedOptions;
+      payload.options = options.filter((o) => o.trim());
     }
 
-    // Ajouter nextMap seulement pour SINGLE_CHOICE et nettoyer les clés
     if (type === "SINGLE_CHOICE") {
       const cleanedNextMap: Record<string, string> = {};
       Object.entries(nextMap).forEach(([key, value]) => {
@@ -167,30 +147,22 @@ const SortableQuestionItem: React.FC<Props> = ({
       payload.nextMap = cleanedNextMap;
     }
 
-    try {
-      onUpdate(question.id, payload);
-      setIsEditing(false);
-      setErrors([]);
-      setToast({
-        message: "Question sauvegardée avec succès !",
-        type: "success",
-      });
-    } catch (error) {
-      setToast({ message: "Erreur lors de la sauvegarde", type: "danger" });
-    }
+    onUpdate(question.id, payload);
+    setIsEditing(false);
+    setErrors([]);
+    setToast({
+      message: "Question sauvegardée avec succès !",
+      type: "success",
+    });
   };
 
   const handleDelete = () => {
-    try {
-      onDelete(question.id);
-      setShowModal(false);
-      setToast({
-        message: "Question supprimée avec succès !",
-        type: "success",
-      });
-    } catch (error) {
-      setToast({ message: "Erreur lors de la suppression", type: "danger" });
-    }
+    onDelete(question.id);
+    setShowModal(false);
+    setToast({
+      message: "Question supprimée avec succès !",
+      type: "success",
+    });
   };
 
   return (
@@ -232,6 +204,7 @@ const SortableQuestionItem: React.FC<Props> = ({
                 ))}
               </select>
 
+              {/* {(type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE") && ( */}
               {(type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE") && (
                 <div className="mb-2">
                   <strong>Options</strong>
@@ -258,7 +231,8 @@ const SortableQuestionItem: React.FC<Props> = ({
                     </div>
                   ))}
                   <button
-                    className="btn btn-sm btn-outline-primary"
+                    // className="btn btn-sm btn-outline-primary"
+                    className="btn btn-sm btn-primary"
                     onClick={() => setOptions([...options, ""])}
                     type="button"
                   >
@@ -268,7 +242,7 @@ const SortableQuestionItem: React.FC<Props> = ({
               )}
 
               {type === "SINGLE_CHOICE" &&
-                options.filter((o) => o.trim() !== "").length > 0 && (
+                options.filter((o) => o.trim()).length > 0 && (
                   <div className="mb-2">
                     <strong>Condition SIMPLE (nextMap)</strong>
                     {options.map((opt) => (
@@ -278,7 +252,7 @@ const SortableQuestionItem: React.FC<Props> = ({
                           className="form-select"
                           value={nextMap[opt] || ""}
                           onChange={(e) =>
-                            setNextMap((prev: Record<string, string>) => ({
+                            setNextMap((prev) => ({
                               ...prev,
                               [opt]: e.target.value,
                             }))
@@ -288,10 +262,14 @@ const SortableQuestionItem: React.FC<Props> = ({
                             -- Choisir la question suivante --
                           </option>
                           {allQuestions
-                            .filter((q) => q.id !== question.id)
+                            .filter(
+                              (q) =>
+                                q.position > question.position &&
+                                q.id !== question.id
+                            )
                             .map((q) => (
                               <option key={q.id} value={q.id}>
-                                {q.label}
+                                {q.position}. {q.label}
                               </option>
                             ))}
                         </select>
@@ -300,54 +278,15 @@ const SortableQuestionItem: React.FC<Props> = ({
                   </div>
                 )}
 
-              {type === "SCALE" && (
-                <div className="d-flex gap-2 mb-2">
-                  <input
-                    type="number"
-                    className="form-control"
-                    value={config?.min ?? 1}
-                    onChange={(e) =>
-                      setConfig({
-                        min: Number(e.target.value),
-                        max: config?.max ?? 5,
-                      })
-                    }
-                  />
-                  <input
-                    type="number"
-                    className="form-control"
-                    value={config?.max ?? 5}
-                    onChange={(e) =>
-                      setConfig({
-                        min: config?.min ?? 1,
-                        max: Number(e.target.value),
-                      })
-                    }
-                  />
-                </div>
-              )}
-
-              {errors.length > 0 && (
-                <div className="alert alert-danger">
-                  <ul className="mb-0">
-                    {errors.map((err, i) => (
-                      <li key={i}>{err}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
               <button
                 className="btn btn-sm btn-success me-2"
                 onClick={handleSave}
-                type="button"
               >
                 💾 Sauver
               </button>
               <button
                 className="btn btn-sm btn-secondary"
                 onClick={() => setIsEditing(false)}
-                type="button"
               >
                 ❌ Annuler
               </button>
@@ -358,7 +297,28 @@ const SortableQuestionItem: React.FC<Props> = ({
                 {question.position}. {question.label}
               </strong>
               <span className="badge bg-info ms-2">{question.type}</span>
+
+              {/* 👁️ BOUTON APERÇU */}
+              <button
+                className="btn btn-sm btn-outline-secondary ms-2"
+                onClick={() => setShowPreview((p) => !p)}
+              >
+                👁️ {showPreview ? "Masquer aperçu" : "Afficher aperçu"}
+              </button>
             </>
+          )}
+
+          {/* 👁️ PREVIEW */}
+          {showPreview && !isEditing && (
+            <div className="mt-2">
+              <QuestionPreview
+                label={label}
+                type={type}
+                options={options}
+                config={config}
+                nextMap={nextMap}
+              />
+            </div>
           )}
         </div>
 
@@ -367,83 +327,789 @@ const SortableQuestionItem: React.FC<Props> = ({
             <button
               className="btn btn-outline-primary"
               onClick={() => setIsEditing(true)}
-              type="button"
             >
               ✏️
             </button>
             <button
               className="btn btn-outline-danger"
               onClick={() => setShowModal(true)}
-              type="button"
             >
               🗑️
             </button>
           </div>
         )}
       </div>
-
-      {/* Modal confirmation */}
-      {showModal && <div className="modal-backdrop fade show"></div>}
-      {showModal && (
-        <div className="modal fade show d-block" tabIndex={-1}>
-          <div className="modal-dialog">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">Confirmation</h5>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => setShowModal(false)}
-                ></button>
-              </div>
-              <div className="modal-body">
-                <p>Voulez-vous vraiment supprimer cette question ?</p>
-              </div>
-              <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setShowModal(false)}
-                >
-                  Annuler
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-danger"
-                  onClick={handleDelete}
-                >
-                  Supprimer
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Toast */}
-      {toast && (
-        <div
-          className={`toast align-items-center text-bg-${toast.type} border-0 show`}
-          role="alert"
-          aria-live="assertive"
-          aria-atomic="true"
-          style={{ position: "fixed", top: 20, right: 20, zIndex: 2000 }}
-        >
-          <div className="d-flex">
-            <div className="toast-body">{toast.message}</div>
-            <button
-              type="button"
-              className="btn-close btn-close-white me-2 m-auto"
-              onClick={() => setToast(null)}
-            ></button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
 
 export default SortableQuestionItem;
+
+// // ===================================== BON avec confirmation à la supression avec css avec validation  et affiche une les questions suivantes dans le conditionnel, pas changement couleur de fond pour la question en Drag&drop
+// import React, { useEffect, useState } from "react";
+// import { useSortable } from "@dnd-kit/sortable";
+// import { CSS } from "@dnd-kit/utilities";
+// import { Question } from "../../services/questionService";
+// import { QuestionType } from "../../types/question";
+// import "./SortableQuestionItem.css";
+
+// interface Props {
+//   question: Question;
+//   allQuestions: Question[];
+//   onDelete: (id: string) => void;
+//   onUpdate: (id: string, data: Partial<Question>) => void;
+//   disabled?: boolean;
+// }
+
+// const QUESTION_TYPES: QuestionType[] = [
+//   "TEXT",
+//   "TEXTAREA",
+//   "NUMBER",
+//   "SCALE",
+//   "SINGLE_CHOICE",
+//   "MULTIPLE_CHOICE",
+//   "DATE",
+//   "EMAIL",
+//   "PHONE",
+// ];
+
+// const SortableQuestionItem: React.FC<Props> = ({
+//   question,
+//   allQuestions,
+//   onDelete,
+//   onUpdate,
+//   disabled,
+// }) => {
+//   const { attributes, listeners, setNodeRef, transform, transition } =
+//     useSortable({ id: question.id });
+
+//   const style = {
+//     transform: CSS.Transform.toString(transform),
+//     transition,
+//   };
+
+//   const [isEditing, setIsEditing] = useState(false);
+//   const [showModal, setShowModal] = useState(false);
+//   const [label, setLabel] = useState(question.label);
+//   const [type, setType] = useState<QuestionType>(question.type);
+//   const [options, setOptions] = useState<string[]>(question.options || []);
+//   const [config, setConfig] = useState(question.config);
+//   const [nextMap, setNextMap] = useState<Record<string, string>>(
+//     question.nextMap || {}
+//   );
+//   const [toast, setToast] = useState<{
+//     message: string;
+//     type: "success" | "danger";
+//   } | null>(null);
+//   const [errors, setErrors] = useState<string[]>([]);
+
+//   // Synchroniser nextMap quand options changent
+//   useEffect(() => {
+//     if (type !== "SINGLE_CHOICE") {
+//       setNextMap({});
+//       return;
+//     }
+
+//     setNextMap((prev) => {
+//       const cleaned: Record<string, string> = {};
+//       options.forEach((opt) => {
+//         if (opt.trim()) cleaned[opt] = prev[opt] || "";
+//       });
+//       return cleaned;
+//     });
+//   }, [options, type]);
+
+//   // Auto close toast
+//   useEffect(() => {
+//     if (toast) {
+//       const timer = setTimeout(() => setToast(null), 3000);
+//       return () => clearTimeout(timer);
+//     }
+//   }, [toast]);
+
+//   const validate = (): boolean => {
+//     const newErrors: string[] = [];
+
+//     if (!label.trim()) newErrors.push("Le libellé est requis.");
+
+//     if (type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE") {
+//       const filledOptions = options.filter((o) => o.trim());
+//       if (filledOptions.length === 0)
+//         newErrors.push("Au moins une option est requise.");
+
+//       Object.entries(nextMap).forEach(([opt, qid]) => {
+//         if (
+//           qid &&
+//           !allQuestions.find(
+//             (q) => q.id === qid && q.position > question.position
+//           )
+//         ) {
+//           newErrors.push(
+//             `L'option "${opt}" pointe vers une question invalide.`
+//           );
+//         }
+//       });
+//     }
+
+//     setErrors(newErrors);
+
+//     if (newErrors.length) {
+//       setToast({ message: newErrors.join(" "), type: "danger" });
+//       return false;
+//     }
+
+//     return true;
+//   };
+
+//   const handleSave = () => {
+//     if (!validate()) return;
+
+//     const payload: Partial<Question> = {
+//       label,
+//       type,
+//       config,
+//       position: question.position,
+//     };
+
+//     if (type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE") {
+//       payload.options = options.filter((o) => o.trim());
+//     }
+
+//     if (type === "SINGLE_CHOICE") {
+//       const cleanedNextMap: Record<string, string> = {};
+//       Object.entries(nextMap).forEach(([key, value]) => {
+//         if (payload.options?.includes(key) && value) {
+//           cleanedNextMap[key] = value;
+//         }
+//       });
+//       payload.nextMap = cleanedNextMap;
+//     }
+
+//     onUpdate(question.id, payload);
+//     setIsEditing(false);
+//     setErrors([]);
+//     setToast({
+//       message: "Question sauvegardée avec succès !",
+//       type: "success",
+//     });
+//   };
+
+//   const handleDelete = () => {
+//     onDelete(question.id);
+//     setShowModal(false);
+//     setToast({
+//       message: "Question supprimée avec succès !",
+//       type: "success",
+//     });
+//   };
+
+//   return (
+//     <div
+//       ref={setNodeRef}
+//       style={style}
+//       className="list-group-item mb-2 rounded shadow-sm"
+//     >
+//       <div className="d-flex justify-content-between align-items-start">
+//         {!disabled && (
+//           <span
+//             className="me-2 text-muted"
+//             style={{ cursor: "grab" }}
+//             {...attributes}
+//             {...listeners}
+//           >
+//             ☰
+//           </span>
+//         )}
+
+//         <div className="flex-grow-1">
+//           {isEditing ? (
+//             <>
+//               <input
+//                 className="form-control mb-2"
+//                 value={label}
+//                 onChange={(e) => setLabel(e.target.value)}
+//               />
+
+//               <select
+//                 className="form-select mb-2"
+//                 value={type}
+//                 onChange={(e) => setType(e.target.value as QuestionType)}
+//               >
+//                 {QUESTION_TYPES.map((t) => (
+//                   <option key={t} value={t}>
+//                     {t}
+//                   </option>
+//                 ))}
+//               </select>
+
+//               {(type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE") && (
+//                 <div className="mb-2">
+//                   <strong>Options</strong>
+//                   {options.map((opt, i) => (
+//                     <div key={i} className="input-group mb-1">
+//                       <input
+//                         className="form-control"
+//                         value={opt}
+//                         onChange={(e) => {
+//                           const copy = [...options];
+//                           copy[i] = e.target.value;
+//                           setOptions(copy);
+//                         }}
+//                       />
+//                       <button
+//                         className="btn btn-outline-danger"
+//                         onClick={() =>
+//                           setOptions(options.filter((_, idx) => idx !== i))
+//                         }
+//                         type="button"
+//                       >
+//                         ✖
+//                       </button>
+//                     </div>
+//                   ))}
+//                 </div>
+//               )}
+
+//               {/* ✅ CONDITION SIMPLE – corrigée */}
+//               {type === "SINGLE_CHOICE" &&
+//                 options.filter((o) => o.trim()).length > 0 && (
+//                   <div className="mb-2">
+//                     <strong>Condition SIMPLE (nextMap)</strong>
+//                     {options.map((opt) => (
+//                       <div key={opt} className="input-group mb-1">
+//                         <span className="input-group-text">{opt} →</span>
+//                         <select
+//                           className="form-select"
+//                           value={nextMap[opt] || ""}
+//                           onChange={(e) =>
+//                             setNextMap((prev) => ({
+//                               ...prev,
+//                               [opt]: e.target.value,
+//                             }))
+//                           }
+//                         >
+//                           <option value="">
+//                             -- Choisir la question suivante --
+//                           </option>
+//                           {allQuestions
+//                             .filter(
+//                               (q) =>
+//                                 q.position > question.position &&
+//                                 q.id !== question.id
+//                             )
+//                             .map((q) => (
+//                               <option key={q.id} value={q.id}>
+//                                 {q.position}. {q.label}
+//                               </option>
+//                             ))}
+//                         </select>
+//                       </div>
+//                     ))}
+//                   </div>
+//                 )}
+
+//               {errors.length > 0 && (
+//                 <div className="alert alert-danger">
+//                   <ul className="mb-0">
+//                     {errors.map((err, i) => (
+//                       <li key={i}>{err}</li>
+//                     ))}
+//                   </ul>
+//                 </div>
+//               )}
+
+//               <button
+//                 className="btn btn-sm btn-success me-2"
+//                 onClick={handleSave}
+//               >
+//                 💾 Sauver
+//               </button>
+//               <button
+//                 className="btn btn-sm btn-secondary"
+//                 onClick={() => setIsEditing(false)}
+//               >
+//                 ❌ Annuler
+//               </button>
+//             </>
+//           ) : (
+//             <>
+//               <strong>
+//                 {question.position}. {question.label}
+//               </strong>
+//               <span className="badge bg-info ms-2">{question.type}</span>
+//             </>
+//           )}
+//         </div>
+
+//         {!disabled && !isEditing && (
+//           <div className="btn-group btn-group-sm ms-2">
+//             <button
+//               className="btn btn-outline-primary"
+//               onClick={() => setIsEditing(true)}
+//             >
+//               ✏️
+//             </button>
+//             <button
+//               className="btn btn-outline-danger"
+//               onClick={() => setShowModal(true)}
+//             >
+//               🗑️
+//             </button>
+//           </div>
+//         )}
+//       </div>
+//     </div>
+//   );
+// };
+
+// export default SortableQuestionItem;
+
+// // ===================================== BON avec confirmation à la supression avec css avec validation pas changement couleur de fond pour la question en Drag&drop
+// import React, { useEffect, useState } from "react";
+// import { useSortable } from "@dnd-kit/sortable";
+// import { CSS } from "@dnd-kit/utilities";
+// import { Question } from "../../services/questionService";
+// import { QuestionType } from "../../types/question";
+// import "./SortableQuestionItem.css"; // CSS fade modal
+
+// interface Props {
+//   question: Question;
+//   allQuestions: Question[];
+//   onDelete: (id: string) => void;
+//   onUpdate: (id: string, data: Partial<Question>) => void;
+//   disabled?: boolean;
+// }
+
+// const QUESTION_TYPES: QuestionType[] = [
+//   "TEXT",
+//   "TEXTAREA",
+//   "NUMBER",
+//   "SCALE",
+//   "SINGLE_CHOICE",
+//   "MULTIPLE_CHOICE",
+//   "DATE",
+//   "EMAIL",
+//   "PHONE",
+// ];
+
+// const SortableQuestionItem: React.FC<Props> = ({
+//   question,
+//   allQuestions,
+//   onDelete,
+//   onUpdate,
+//   disabled,
+// }) => {
+//   const { attributes, listeners, setNodeRef, transform, transition } =
+//     useSortable({ id: question.id });
+
+//   const style = {
+//     transform: CSS.Transform.toString(transform),
+//     transition,
+//   };
+
+//   const [isEditing, setIsEditing] = useState(false);
+//   const [showModal, setShowModal] = useState(false);
+//   const [label, setLabel] = useState<string>(question.label);
+//   const [type, setType] = useState<QuestionType>(question.type);
+//   const [options, setOptions] = useState<string[]>(question.options || []);
+//   const [config, setConfig] = useState<
+//     { min: number; max: number } | undefined
+//   >(question.config);
+//   const [nextMap, setNextMap] = useState<Record<string, string>>(
+//     question.nextMap || {}
+//   );
+//   const [toast, setToast] = useState<{
+//     message: string;
+//     type: "success" | "danger";
+//   } | null>(null);
+//   const [errors, setErrors] = useState<string[]>([]);
+
+//   // Synchroniser nextMap quand options changent
+//   useEffect(() => {
+//     if (type !== "SINGLE_CHOICE") {
+//       setNextMap({});
+//       return;
+//     }
+//     setNextMap((prev: Record<string, string>) => {
+//       const cleaned: Record<string, string> = {};
+//       options.forEach((opt) => {
+//         if (opt.trim()) cleaned[opt] = prev[opt] || "";
+//       });
+//       return cleaned;
+//     });
+//   }, [options, type]);
+
+//   // Fermeture automatique du toast après 3s
+//   useEffect(() => {
+//     if (toast) {
+//       const timer = setTimeout(() => setToast(null), 3000);
+//       return () => clearTimeout(timer);
+//     }
+//   }, [toast]);
+
+//   // Validation du formulaire
+//   const validate = (): boolean => {
+//     const newErrors: string[] = [];
+
+//     if (!label.trim()) newErrors.push("Le libellé de la question est requis.");
+
+//     if (type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE") {
+//       const filledOptions = options.filter((o) => o.trim() !== "");
+//       if (filledOptions.length === 0)
+//         newErrors.push("Au moins une option est requise.");
+//       filledOptions.forEach((opt, idx) => {
+//         if (!opt.trim()) newErrors.push(`Option ${idx + 1} est vide.`);
+//       });
+
+//       // Vérifier que nextMap ne pointe pas vers une question inexistante
+//       Object.entries(nextMap).forEach(([opt, qid]) => {
+//         if (qid && !allQuestions.find((q) => q.id === qid)) {
+//           newErrors.push(
+//             `L'option "${opt}" pointe vers une question invalide.`
+//           );
+//         }
+//       });
+//     }
+
+//     setErrors(newErrors);
+
+//     if (newErrors.length > 0) {
+//       setToast({ message: newErrors.join(" "), type: "danger" });
+//       return false;
+//     }
+
+//     return true;
+//   };
+
+//   // const handleSave = () => {
+//   //   if (!validate()) return;
+
+//   //   const payload: Partial<Question> = {
+//   //     label,
+//   //     type,
+//   //     options,
+//   //     config,
+//   //     nextMap: type === "SINGLE_CHOICE" ? nextMap : {},
+//   //     position: question.position, // 🔹 ajouter ici
+//   //   };
+
+//   //   try {
+//   //     onUpdate(question.id, payload);
+//   //     setIsEditing(false);
+//   //     setErrors([]);
+//   //     setToast({
+//   //       message: "Question sauvegardée avec succès !",
+//   //       type: "success",
+//   //     });
+//   //   } catch (error) {
+//   //     setToast({ message: "Erreur lors de la sauvegarde", type: "danger" });
+//   //   }
+//   // };
+//   const handleSave = () => {
+//     if (!validate()) return;
+
+//     // Commencer avec les champs de base
+//     const payload: Partial<Question> = {
+//       label,
+//       type,
+//       config,
+//       position: question.position, // 🔹 obligatoire pour le serveur
+//     };
+
+//     // Ajouter options si le type le nécessite
+//     if (type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE") {
+//       const cleanedOptions = options.filter((o) => o.trim() !== "");
+//       payload.options = cleanedOptions;
+//     }
+
+//     // Ajouter nextMap seulement pour SINGLE_CHOICE et nettoyer les clés
+//     if (type === "SINGLE_CHOICE") {
+//       const cleanedNextMap: Record<string, string> = {};
+//       Object.entries(nextMap).forEach(([key, value]) => {
+//         if (payload.options?.includes(key) && value) {
+//           cleanedNextMap[key] = value;
+//         }
+//       });
+//       payload.nextMap = cleanedNextMap;
+//     }
+
+//     try {
+//       onUpdate(question.id, payload);
+//       setIsEditing(false);
+//       setErrors([]);
+//       setToast({
+//         message: "Question sauvegardée avec succès !",
+//         type: "success",
+//       });
+//     } catch (error) {
+//       setToast({ message: "Erreur lors de la sauvegarde", type: "danger" });
+//     }
+//   };
+
+//   const handleDelete = () => {
+//     try {
+//       onDelete(question.id);
+//       setShowModal(false);
+//       setToast({
+//         message: "Question supprimée avec succès !",
+//         type: "success",
+//       });
+//     } catch (error) {
+//       setToast({ message: "Erreur lors de la suppression", type: "danger" });
+//     }
+//   };
+
+//   return (
+//     <div
+//       ref={setNodeRef}
+//       style={style}
+//       className="list-group-item mb-2 rounded shadow-sm"
+//     >
+//       <div className="d-flex justify-content-between align-items-start">
+//         {!disabled && (
+//           <span
+//             className="me-2 text-muted"
+//             style={{ cursor: "grab" }}
+//             {...attributes}
+//             {...listeners}
+//           >
+//             ☰
+//           </span>
+//         )}
+
+//         <div className="flex-grow-1">
+//           {isEditing ? (
+//             <>
+//               <input
+//                 className="form-control mb-2"
+//                 value={label}
+//                 onChange={(e) => setLabel(e.target.value)}
+//               />
+
+//               <select
+//                 className="form-select mb-2"
+//                 value={type}
+//                 onChange={(e) => setType(e.target.value as QuestionType)}
+//               >
+//                 {QUESTION_TYPES.map((t) => (
+//                   <option key={t} value={t}>
+//                     {t}
+//                   </option>
+//                 ))}
+//               </select>
+
+//               {(type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE") && (
+//                 <div className="mb-2">
+//                   <strong>Options</strong>
+//                   {options.map((opt, i) => (
+//                     <div key={i} className="input-group mb-1">
+//                       <input
+//                         className="form-control"
+//                         value={opt}
+//                         onChange={(e) => {
+//                           const copy = [...options];
+//                           copy[i] = e.target.value;
+//                           setOptions(copy);
+//                         }}
+//                       />
+//                       <button
+//                         className="btn btn-outline-danger"
+//                         onClick={() =>
+//                           setOptions(options.filter((_, idx) => idx !== i))
+//                         }
+//                         type="button"
+//                       >
+//                         ✖
+//                       </button>
+//                     </div>
+//                   ))}
+//                   <button
+//                     className="btn btn-sm btn-outline-primary"
+//                     onClick={() => setOptions([...options, ""])}
+//                     type="button"
+//                   >
+//                     + Ajouter option
+//                   </button>
+//                 </div>
+//               )}
+
+//               {type === "SINGLE_CHOICE" &&
+//                 options.filter((o) => o.trim() !== "").length > 0 && (
+//                   <div className="mb-2">
+//                     <strong>Condition SIMPLE (nextMap)</strong>
+//                     {options.map((opt) => (
+//                       <div key={opt} className="input-group mb-1">
+//                         <span className="input-group-text">{opt} →</span>
+//                         <select
+//                           className="form-select"
+//                           value={nextMap[opt] || ""}
+//                           onChange={(e) =>
+//                             setNextMap((prev: Record<string, string>) => ({
+//                               ...prev,
+//                               [opt]: e.target.value,
+//                             }))
+//                           }
+//                         >
+//                           <option value="">
+//                             -- Choisir la question suivante --
+//                           </option>
+//                           {allQuestions
+//                             .filter((q) => q.id !== question.id)
+//                             .map((q) => (
+//                               <option key={q.id} value={q.id}>
+//                                 {q.label}
+//                               </option>
+//                             ))}
+//                         </select>
+//                       </div>
+//                     ))}
+//                   </div>
+//                 )}
+
+//               {type === "SCALE" && (
+//                 <div className="d-flex gap-2 mb-2">
+//                   <input
+//                     type="number"
+//                     className="form-control"
+//                     value={config?.min ?? 1}
+//                     onChange={(e) =>
+//                       setConfig({
+//                         min: Number(e.target.value),
+//                         max: config?.max ?? 5,
+//                       })
+//                     }
+//                   />
+//                   <input
+//                     type="number"
+//                     className="form-control"
+//                     value={config?.max ?? 5}
+//                     onChange={(e) =>
+//                       setConfig({
+//                         min: config?.min ?? 1,
+//                         max: Number(e.target.value),
+//                       })
+//                     }
+//                   />
+//                 </div>
+//               )}
+
+//               {errors.length > 0 && (
+//                 <div className="alert alert-danger">
+//                   <ul className="mb-0">
+//                     {errors.map((err, i) => (
+//                       <li key={i}>{err}</li>
+//                     ))}
+//                   </ul>
+//                 </div>
+//               )}
+
+//               <button
+//                 className="btn btn-sm btn-success me-2"
+//                 onClick={handleSave}
+//                 type="button"
+//               >
+//                 💾 Sauver
+//               </button>
+//               <button
+//                 className="btn btn-sm btn-secondary"
+//                 onClick={() => setIsEditing(false)}
+//                 type="button"
+//               >
+//                 ❌ Annuler
+//               </button>
+//             </>
+//           ) : (
+//             <>
+//               <strong>
+//                 {question.position}. {question.label}
+//               </strong>
+//               <span className="badge bg-info ms-2">{question.type}</span>
+//             </>
+//           )}
+//         </div>
+
+//         {!disabled && !isEditing && (
+//           <div className="btn-group btn-group-sm ms-2">
+//             <button
+//               className="btn btn-outline-primary"
+//               onClick={() => setIsEditing(true)}
+//               type="button"
+//             >
+//               ✏️
+//             </button>
+//             <button
+//               className="btn btn-outline-danger"
+//               onClick={() => setShowModal(true)}
+//               type="button"
+//             >
+//               🗑️
+//             </button>
+//           </div>
+//         )}
+//       </div>
+
+//       {/* Modal confirmation */}
+//       {showModal && <div className="modal-backdrop fade show"></div>}
+//       {showModal && (
+//         <div className="modal fade show d-block" tabIndex={-1}>
+//           <div className="modal-dialog">
+//             <div className="modal-content">
+//               <div className="modal-header">
+//                 <h5 className="modal-title">Confirmation</h5>
+//                 <button
+//                   type="button"
+//                   className="btn-close"
+//                   onClick={() => setShowModal(false)}
+//                 ></button>
+//               </div>
+//               <div className="modal-body">
+//                 <p>Voulez-vous vraiment supprimer cette question ?</p>
+//               </div>
+//               <div className="modal-footer">
+//                 <button
+//                   type="button"
+//                   className="btn btn-secondary"
+//                   onClick={() => setShowModal(false)}
+//                 >
+//                   Annuler
+//                 </button>
+//                 <button
+//                   type="button"
+//                   className="btn btn-danger"
+//                   onClick={handleDelete}
+//                 >
+//                   Supprimer
+//                 </button>
+//               </div>
+//             </div>
+//           </div>
+//         </div>
+//       )}
+
+//       {/* Toast */}
+//       {toast && (
+//         <div
+//           className={`toast align-items-center text-bg-${toast.type} border-0 show`}
+//           role="alert"
+//           aria-live="assertive"
+//           aria-atomic="true"
+//           style={{ position: "fixed", top: 20, right: 20, zIndex: 2000 }}
+//         >
+//           <div className="d-flex">
+//             <div className="toast-body">{toast.message}</div>
+//             <button
+//               type="button"
+//               className="btn-close btn-close-white me-2 m-auto"
+//               onClick={() => setToast(null)}
+//             ></button>
+//           </div>
+//         </div>
+//       )}
+//     </div>
+//   );
+// };
+
+// export default SortableQuestionItem;
 
 // ===================================================== BON avec confirmation à la supression avec css sans validation
 // import React, { useEffect, useState } from "react";
@@ -579,7 +1245,7 @@ export default SortableQuestionItem;
 //             ☰
 //           </span>
 //         )}
-
+// //==========================================
 //         <div className="flex-grow-1">
 //           {isEditing ? (
 //             <>
@@ -633,6 +1299,7 @@ export default SortableQuestionItem;
 //                   >
 //                     + Ajouter option
 //                   </button>
+// //==========================================================
 //                 </div>
 //               )}
 
