@@ -1,5 +1,3 @@
-// // src/pages/questions/SurveyQuestionsPage.tsx
-// src/pages/questions/SurveyQuestionsPage.tsx
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
@@ -14,10 +12,7 @@ import surveyService, { Survey } from "../../services/surveyService";
 import QuestionForm from "../../components/questions/QuestionForm";
 import QuestionList from "../../components/questions/QuestionList";
 import { QuestionType } from "../../types/question";
-import QuestionDependencyGraph, {
-  Node,
-  Edge,
-} from "../../components/questions/QuestionDependencyGraph";
+import QuestionDependencyGraph from "../../components/questions/QuestionDependencyGraph";
 
 const SurveyQuestionsPage = () => {
   const navigate = useNavigate();
@@ -91,13 +86,22 @@ const SurveyQuestionsPage = () => {
   // ======================
   // DELETE
   // ======================
+  // const deleteQuestion = async (id: string) => {
+  //   if (!tenantSlug || !surveyId || isAdvanced) return;
+
+  //   await questionService.remove(tenantSlug, surveyId, id);
+  //   load();
+  // };
   const deleteQuestion = async (id: string) => {
     if (!tenantSlug || !surveyId || isAdvanced) return;
 
+    // 1️⃣ Supprimer la question
     await questionService.remove(tenantSlug, surveyId, id);
 
+    // 2️⃣ Recharger les questions
     const res = await questionService.list(tenantSlug, surveyId);
 
+    // 3️⃣ Recalculer les positions
     const reordered = [...res.data]
       .sort((a, b) => a.position - b.position)
       .map((q, index) => ({
@@ -105,12 +109,14 @@ const SurveyQuestionsPage = () => {
         position: index + 1,
       }));
 
+    // 4️⃣ Mettre à jour les positions en base
     for (const q of reordered) {
       await questionService.update(tenantSlug, surveyId, q.id, {
         position: q.position,
       });
     }
 
+    // 5️⃣ Mettre à jour le state
     setQuestions(reordered);
   };
 
@@ -146,38 +152,6 @@ const SurveyQuestionsPage = () => {
     return <p className="p-3">Chargement des questions…</p>;
   }
 
-  // ======================
-  // Nodes & Edges pour Cytoscape (robuste)
-  // ======================
-  const nodes: Node[] = questions.map((q) => ({
-    id: q.id,
-    label: q.label,
-  }));
-
-  const validEdges: Edge[] = [];
-  const invalidEdges: Edge[] = [];
-
-  questions.forEach((q) => {
-    if (!q.nextMap) return;
-
-    Object.entries(q.nextMap).forEach(([option, targetId]) => {
-      if (targetId && questions.find((n) => n.id === targetId)) {
-        validEdges.push({ source: q.id, target: targetId, label: option });
-      } else {
-        invalidEdges.push({
-          source: q.id,
-          target: targetId || "",
-          label: option,
-        });
-      }
-    });
-  });
-
-  const edges = [...validEdges, ...invalidEdges];
-
-  // ======================
-  // RENDER
-  // ======================
   return (
     <div className="p-3">
       <h2 className="mb-3">🧩 Questions du survey</h2>
@@ -201,7 +175,7 @@ const SurveyQuestionsPage = () => {
 
       {!isAdvanced && (
         <div className="mb-4">
-          <QuestionForm onSubmit={createQuestion} />
+          <QuestionForm onSubmit={createQuestion} allQuestions={questions} />
         </div>
       )}
 
@@ -218,438 +192,21 @@ const SurveyQuestionsPage = () => {
           />
         </SortableContext>
       </DndContext>
-
       {/* <div className="mt-4 p-3 border rounded" style={{ height: "400px" }}>
-        {questions.length > 0 && (
-          <QuestionDependencyGraph nodes={nodes} edges={edges} />
-        )}
+        <QuestionDependencyGraph questions={questions} />
       </div> */}
+      <h4 className="mt-4">🔗 Dépendances entre questions</h4>
+      <div
+        className="border rounded p-2"
+        style={{ height: 500, background: "#fafafa" }}
+      >
+        <QuestionDependencyGraph questions={questions} />
+      </div>
     </div>
   );
 };
 
 export default SurveyQuestionsPage;
-
-// ====================================
-// import { useEffect, useState } from "react";
-// import { useNavigate, useParams } from "react-router-dom";
-// import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
-// import {
-//   SortableContext,
-//   verticalListSortingStrategy,
-//   arrayMove,
-// } from "@dnd-kit/sortable";
-
-// import questionService, { Question } from "../../services/questionService";
-// import surveyService, { Survey } from "../../services/surveyService";
-// import QuestionForm from "../../components/questions/QuestionForm";
-// import QuestionList from "../../components/questions/QuestionList";
-// import { QuestionType } from "../../types/question";
-// import QuestionDependencyGraph, {
-//   Node,
-//   Edge,
-// } from "../../components/questions/QuestionDependencyGraph";
-
-// const SurveyQuestionsPage = () => {
-//   const navigate = useNavigate();
-//   const { tenantSlug, surveyId } = useParams<{
-//     tenantSlug: string;
-//     surveyId: string;
-//   }>();
-
-//   const [survey, setSurvey] = useState<Survey | null>(null);
-//   const [questions, setQuestions] = useState<Question[]>([]);
-//   const [loading, setLoading] = useState(true);
-
-//   const isAdvanced = survey?.mode === "ADVANCED";
-
-//   // ======================
-//   // LOAD
-//   // ======================
-//   const load = async () => {
-//     if (!tenantSlug || !surveyId) return;
-//     setLoading(true);
-
-//     try {
-//       const [surveyRes, questionsRes] = await Promise.all([
-//         surveyService.get(tenantSlug, surveyId),
-//         questionService.list(tenantSlug, surveyId),
-//       ]);
-
-//       setSurvey(surveyRes);
-//       setQuestions(
-//         [...questionsRes.data].sort((a, b) => a.position - b.position)
-//       );
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   useEffect(() => {
-//     load();
-//   }, [tenantSlug, surveyId]);
-
-//   // ======================
-//   // CREATE
-//   // ======================
-//   const createQuestion = async (data: {
-//     label: string;
-//     type: QuestionType;
-//     options?: string[];
-//     config?: { min: number; max: number };
-//     nextMap?: Record<string, string>;
-//   }) => {
-//     if (!tenantSlug || !surveyId || isAdvanced) return;
-
-//     await questionService.create(tenantSlug, surveyId, {
-//       ...data,
-//       position: questions.length + 1,
-//     });
-
-//     load();
-//   };
-
-//   // ======================
-//   // UPDATE
-//   // ======================
-//   const updateQuestion = async (id: string, data: Partial<Question>) => {
-//     if (!tenantSlug || !surveyId || isAdvanced) return;
-
-//     await questionService.update(tenantSlug, surveyId, id, data);
-//     load();
-//   };
-
-//   // ======================
-//   // DELETE
-//   // ======================
-//   const deleteQuestion = async (id: string) => {
-//     if (!tenantSlug || !surveyId || isAdvanced) return;
-
-//     await questionService.remove(tenantSlug, surveyId, id);
-
-//     const res = await questionService.list(tenantSlug, surveyId);
-
-//     const reordered = [...res.data]
-//       .sort((a, b) => a.position - b.position)
-//       .map((q, index) => ({
-//         ...q,
-//         position: index + 1,
-//       }));
-
-//     for (const q of reordered) {
-//       await questionService.update(tenantSlug, surveyId, q.id, {
-//         position: q.position,
-//       });
-//     }
-
-//     setQuestions(reordered);
-//   };
-
-//   // ======================
-//   // DRAG & DROP
-//   // ======================
-//   const handleDragEnd = async (event: DragEndEvent) => {
-//     if (isAdvanced) return;
-
-//     const { active, over } = event;
-//     if (!over || active.id === over.id) return;
-
-//     const oldIndex = questions.findIndex((q) => q.id === active.id);
-//     const newIndex = questions.findIndex((q) => q.id === over.id);
-
-//     const reordered = arrayMove(questions, oldIndex, newIndex).map(
-//       (q, idx) => ({
-//         ...q,
-//         position: idx + 1,
-//       })
-//     );
-
-//     setQuestions(reordered);
-
-//     for (const q of reordered) {
-//       await questionService.update(tenantSlug!, surveyId!, q.id, {
-//         position: q.position,
-//       });
-//     }
-//   };
-
-//   if (loading) {
-//     return <p className="p-3">Chargement des questions…</p>;
-//   }
-
-//   // ======================
-//   // Nodes & Edges pour Cytoscape
-//   // ======================
-//   const nodes: Node[] = questions.map((q) => ({
-//     id: q.id,
-//     label: q.label,
-//   }));
-
-//   const edges: Edge[] = questions.flatMap((q) =>
-//     q.nextMap
-//       ? Object.entries(q.nextMap).map(([option, targetId]) => ({
-//           source: q.id,
-//           target: targetId,
-//           label: option,
-//         }))
-//       : []
-//   );
-
-//   return (
-//     <div className="p-3">
-//       <h2 className="mb-3">🧩 Questions du survey</h2>
-
-//       {isAdvanced && (
-//         <div className="alert alert-danger">
-//           <strong>🚫 Mode avancé</strong>
-//           <p className="mb-2">
-//             Les questions sont gérées via le Survey Builder
-//           </p>
-//           <button
-//             className="btn btn-light"
-//             onClick={() =>
-//               navigate(`/t/${tenantSlug}/surveys/${surveyId}/builder`)
-//             }
-//           >
-//             Ouvrir le Builder
-//           </button>
-//         </div>
-//       )}
-
-//       {!isAdvanced && (
-//         <div className="mb-4">
-//           <QuestionForm onSubmit={createQuestion} />
-//         </div>
-//       )}
-
-//       <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-//         <SortableContext
-//           items={questions.map((q) => q.id)}
-//           strategy={verticalListSortingStrategy}
-//         >
-//           <QuestionList
-//             questions={questions}
-//             onDelete={deleteQuestion}
-//             onUpdate={updateQuestion}
-//             disabled={isAdvanced}
-//           />
-//         </SortableContext>
-//       </DndContext>
-
-//       <div className="mt-4 p-3 border rounded" style={{ height: "400px" }}>
-//         {questions.length > 0 && (
-//           <QuestionDependencyGraph nodes={nodes} edges={edges} />
-//         )}
-//       </div>
-//     </div>
-//   );
-// };
-
-// export default SurveyQuestionsPage;
-
-// ================================================
-// import { useEffect, useState } from "react";
-// import { useNavigate, useParams } from "react-router-dom";
-// import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
-// import {
-//   SortableContext,
-//   verticalListSortingStrategy,
-//   arrayMove,
-// } from "@dnd-kit/sortable";
-
-// import questionService, { Question } from "../../services/questionService";
-// import surveyService, { Survey } from "../../services/surveyService";
-// import QuestionForm from "../../components/questions/QuestionForm";
-// import QuestionList from "../../components/questions/QuestionList";
-// import { QuestionType } from "../../types/question";
-// import QuestionDependencyGraph from "../../components/questions/QuestionDependencyGraph";
-
-// const SurveyQuestionsPage = () => {
-//   const navigate = useNavigate();
-//   const { tenantSlug, surveyId } = useParams<{
-//     tenantSlug: string;
-//     surveyId: string;
-//   }>();
-
-//   const [survey, setSurvey] = useState<Survey | null>(null);
-//   const [questions, setQuestions] = useState<Question[]>([]);
-//   const [loading, setLoading] = useState(true);
-
-//   const isAdvanced = survey?.mode === "ADVANCED";
-
-//   // ======================
-//   // LOAD
-//   // ======================
-//   const load = async () => {
-//     if (!tenantSlug || !surveyId) return;
-//     setLoading(true);
-
-//     try {
-//       const [surveyRes, questionsRes] = await Promise.all([
-//         surveyService.get(tenantSlug, surveyId),
-//         questionService.list(tenantSlug, surveyId),
-//       ]);
-
-//       setSurvey(surveyRes);
-//       setQuestions(
-//         [...questionsRes.data].sort((a, b) => a.position - b.position)
-//       );
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   useEffect(() => {
-//     load();
-//   }, [tenantSlug, surveyId]);
-
-//   // ======================
-//   // CREATE
-//   // ======================
-//   const createQuestion = async (data: {
-//     label: string;
-//     type: QuestionType;
-//     options?: string[];
-//     config?: { min: number; max: number };
-//     nextMap?: Record<string, string>;
-//   }) => {
-//     if (!tenantSlug || !surveyId || isAdvanced) return;
-
-//     await questionService.create(tenantSlug, surveyId, {
-//       ...data,
-//       position: questions.length + 1,
-//     });
-
-//     load();
-//   };
-
-//   // ======================
-//   // UPDATE
-//   // ======================
-//   const updateQuestion = async (id: string, data: Partial<Question>) => {
-//     if (!tenantSlug || !surveyId || isAdvanced) return;
-
-//     await questionService.update(tenantSlug, surveyId, id, data);
-//     load();
-//   };
-
-//   // ======================
-//   // DELETE
-//   // ======================
-//   // const deleteQuestion = async (id: string) => {
-//   //   if (!tenantSlug || !surveyId || isAdvanced) return;
-
-//   //   await questionService.remove(tenantSlug, surveyId, id);
-//   //   load();
-//   // };
-//   const deleteQuestion = async (id: string) => {
-//     if (!tenantSlug || !surveyId || isAdvanced) return;
-
-//     // 1️⃣ Supprimer la question
-//     await questionService.remove(tenantSlug, surveyId, id);
-
-//     // 2️⃣ Recharger les questions
-//     const res = await questionService.list(tenantSlug, surveyId);
-
-//     // 3️⃣ Recalculer les positions
-//     const reordered = [...res.data]
-//       .sort((a, b) => a.position - b.position)
-//       .map((q, index) => ({
-//         ...q,
-//         position: index + 1,
-//       }));
-
-//     // 4️⃣ Mettre à jour les positions en base
-//     for (const q of reordered) {
-//       await questionService.update(tenantSlug, surveyId, q.id, {
-//         position: q.position,
-//       });
-//     }
-
-//     // 5️⃣ Mettre à jour le state
-//     setQuestions(reordered);
-//   };
-
-//   // ======================
-//   // DRAG & DROP
-//   // ======================
-//   const handleDragEnd = async (event: DragEndEvent) => {
-//     if (isAdvanced) return;
-
-//     const { active, over } = event;
-//     if (!over || active.id === over.id) return;
-
-//     const oldIndex = questions.findIndex((q) => q.id === active.id);
-//     const newIndex = questions.findIndex((q) => q.id === over.id);
-
-//     const reordered = arrayMove(questions, oldIndex, newIndex).map(
-//       (q, idx) => ({
-//         ...q,
-//         position: idx + 1,
-//       })
-//     );
-
-//     setQuestions(reordered);
-
-//     for (const q of reordered) {
-//       await questionService.update(tenantSlug!, surveyId!, q.id, {
-//         position: q.position,
-//       });
-//     }
-//   };
-
-//   if (loading) {
-//     return <p className="p-3">Chargement des questions…</p>;
-//   }
-
-//   return (
-//     <div className="p-3">
-//       <h2 className="mb-3">🧩 Questions du survey</h2>
-
-//       {isAdvanced && (
-//         <div className="alert alert-danger">
-//           <strong>🚫 Mode avancé</strong>
-//           <p className="mb-2">
-//             Les questions sont gérées via le Survey Builder
-//           </p>
-//           <button
-//             className="btn btn-light"
-//             onClick={() =>
-//               navigate(`/t/${tenantSlug}/surveys/${surveyId}/builder`)
-//             }
-//           >
-//             Ouvrir le Builder
-//           </button>
-//         </div>
-//       )}
-
-//       {!isAdvanced && (
-//         <div className="mb-4">
-//           <QuestionForm onSubmit={createQuestion} />
-//         </div>
-//       )}
-
-//       <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-//         <SortableContext
-//           items={questions.map((q) => q.id)}
-//           strategy={verticalListSortingStrategy}
-//         >
-//           <QuestionList
-//             questions={questions}
-//             onDelete={deleteQuestion}
-//             onUpdate={updateQuestion}
-//             disabled={isAdvanced}
-//           />
-//         </SortableContext>
-//       </DndContext>
-//       <div className="mt-4 p-3 border rounded" style={{ height: "400px" }}>
-//         <QuestionDependencyGraph questions={questions} />
-//       </div>
-//     </div>
-//   );
-// };
-
-// export default SurveyQuestionsPage;
 
 // ===========================================
 // import { useEffect, useState } from "react";

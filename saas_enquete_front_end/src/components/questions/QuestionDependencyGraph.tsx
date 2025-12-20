@@ -1,354 +1,180 @@
-// src/components/questions/QuestionDependencyGraph.tsx
-import React, { useEffect, useRef } from "react";
-import Cytoscape from "cytoscape";
-
-export interface Node {
-  id: string;
-  label: string;
-}
-
-export interface Edge {
-  source: string;
-  target: string;
-  label?: string;
-}
+import { ButtonGroup } from "react-bootstrap";
+import React, { useMemo } from "react";
+import ReactFlow, {
+  Background,
+  Controls,
+  MiniMap,
+  Node,
+  Edge,
+  Position,
+} from "reactflow";
+import dagre from "dagre";
+import "reactflow/dist/style.css";
+import { Question } from "../../services/questionService";
+import { QuestionType } from "../../types/question";
 
 interface Props {
-  nodes: Node[];
-  edges: Edge[];
+  questions: Question[];
 }
 
-const QuestionDependencyGraph: React.FC<Props> = ({ nodes, edges }) => {
-  const cyRef = useRef<Cytoscape.Core | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+/* 🎨 Couleurs par type */
+const TYPE_COLORS: Record<QuestionType, string> = {
+  TEXT: "#e3f2fd",
+  TEXTAREA: "#e3f2fd",
+  NUMBER: "#fff3e0",
+  SCALE: "#ede7f6",
+  SINGLE_CHOICE: "#e8f5e9",
+  MULTIPLE_CHOICE: "#e8f5e9",
+  DATE: "#fce4ec",
+  EMAIL: "#fce4ec",
+  PHONE: "#fce4ec",
+};
 
-  const generateEdgeId = (source: string, target: string) =>
-    `${source}-${target}`;
+/* 📐 Layout DAG */
+const dagreGraph = new dagre.graphlib.Graph();
+dagreGraph.setDefaultEdgeLabel(() => ({}));
 
-  useEffect(() => {
-    if (!containerRef.current) return;
+const nodeWidth = 240;
+const nodeHeight = 70;
 
-    const nodeIds = nodes.map((n) => n.id);
+function getLayoutedElements(nodes: Node[], edges: Edge[]) {
+  dagreGraph.setGraph({
+    rankdir: "TB", // Top → Bottom
+    ranksep: 80,
+    nodesep: 40,
+  });
 
-    // Séparer edges valides et invalides
-    const validEdges = edges.filter(
-      (e) =>
-        e.source &&
-        e.target &&
-        nodeIds.includes(e.source) &&
-        nodeIds.includes(e.target)
-    );
+  nodes.forEach((node) => {
+    dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
+  });
 
-    const invalidEdges = edges.filter(
-      (e) =>
-        !e.target || !nodeIds.includes(e.target) || !nodeIds.includes(e.source)
-    );
+  edges.forEach((edge) => {
+    dagreGraph.setEdge(edge.source, edge.target);
+  });
 
-    const elements = [
-      ...nodes.map((n) => ({ data: { id: n.id, label: n.label } })),
-      ...validEdges.map((e) => ({
-        data: {
-          id: generateEdgeId(e.source, e.target),
-          source: e.source,
-          target: e.target,
-          label: e.label,
-        },
-        classes: "valid-edge",
-      })),
-      ...invalidEdges.map((e) => ({
-        data: {
-          id: generateEdgeId(e.source, e.target),
-          source: e.source,
-          target: e.target || "",
-          label: e.label,
-        },
-        classes: "invalid-edge",
-      })),
-    ];
+  dagre.layout(dagreGraph);
 
-    if (!cyRef.current) {
-      cyRef.current = Cytoscape({
-        container: containerRef.current,
-        elements,
-        style: [
-          {
-            selector: "node",
-            style: {
-              "background-color": "#0074D9",
-              label: "data(label)",
-              color: "#fff",
-              "text-valign": "center",
-              "text-halign": "center",
-              "font-size": "12px",
+  const layoutedNodes = nodes.map((node) => {
+    const nodeWithPosition = dagreGraph.node(node.id);
+    return {
+      ...node,
+      position: {
+        x: nodeWithPosition.x - nodeWidth / 2,
+        y: nodeWithPosition.y - nodeHeight / 2,
+      },
+    };
+  });
+
+  return { nodes: layoutedNodes, edges };
+}
+
+const QuestionDependencyGraph = ({ questions }: Props) => {
+  const { nodes, edges } = useMemo(() => {
+    const nodes: Node[] = questions.map((q) => ({
+      id: q.id,
+      data: {
+        label: (
+          <div>
+            <strong>
+              {q.position}. {q.label}
+            </strong>
+            <div style={{ fontSize: 12, opacity: 0.7 }}>{q.type}</div>
+          </div>
+        ),
+      },
+      position: { x: 0, y: 0 },
+      sourcePosition: Position.Bottom,
+      targetPosition: Position.Top,
+      style: {
+        background: TYPE_COLORS[q.type],
+        border: "1px solid #555",
+        borderRadius: 8,
+        padding: 8,
+        width: nodeWidth,
+      },
+    }));
+
+    const edges: Edge[] = [];
+
+    questions.forEach((q) => {
+      if (!q.nextMap) return;
+
+      Object.entries(q.nextMap).forEach(([answer, targetId]) => {
+        if (questions.find((x) => x.id === targetId)) {
+          edges.push({
+            id: `${q.id}-${targetId}-${answer}`,
+            source: q.id,
+            target: targetId,
+            label: answer,
+            animated: true,
+            style: { stroke: "#444" },
+            labelStyle: {
+              fontSize: 11,
+              fill: "#000",
+              fontWeight: 500,
             },
-          },
-          {
-            selector: "edge.valid-edge",
-            style: {
-              width: 2,
-              "line-color": "#aaa",
-              "target-arrow-color": "#aaa",
-              "target-arrow-shape": "triangle",
-              label: "data(label)",
-              "curve-style": "bezier",
-              "font-size": "10px",
-            },
-          },
-          {
-            selector: "edge.invalid-edge",
-            style: {
-              width: 3,
-              "line-color": "red",
-              "target-arrow-color": "red",
-              "target-arrow-shape": "triangle",
-              "line-style": "dashed",
-              label: "data(label)",
-              "curve-style": "bezier",
-              "font-size": "10px",
-            },
-          },
-        ],
-        layout: { name: "cose", animate: true },
+          });
+        }
       });
-    } else {
-      cyRef.current.elements().remove();
-      cyRef.current.add(elements);
-      cyRef.current.layout({ name: "cose", animate: true }).run();
-    }
-  }, [nodes, edges]);
+    });
 
-  return <div ref={containerRef} style={{ width: "100%", height: "600px" }} />;
+    return getLayoutedElements(nodes, edges);
+  }, [questions]);
+
+  return (
+    <ReactFlow
+      nodes={nodes}
+      edges={edges}
+      fitView
+      panOnScroll
+      zoomOnScroll
+      zoomOnPinch
+      nodesDraggable={false}
+      nodesConnectable={false}
+    >
+      <MiniMap />
+      <Controls />
+      <Background />
+    </ReactFlow>
+  );
 };
 
 export default QuestionDependencyGraph;
 
-// ======================================
-// import React, { useEffect, useRef } from "react";
-// import Cytoscape from "cytoscape";
-// // src/components/questions/QuestionDependencyGraph.tsx
-// // src/components/questions/QuestionDependencyGraph.tsx
-
-// export interface Node {
-//   id: string;
-//   label: string;
-// }
-
-// export interface Edge {
-//   source: string;
-//   target: string;
-//   label?: string;
-// }
-
-// interface Props {
-//   nodes: Node[];
-//   edges: Edge[];
-// }
-
-// const QuestionDependencyGraph: React.FC<Props> = ({ nodes, edges }) => {
-//   const cyRef = useRef<Cytoscape.Core | null>(null);
-//   const containerRef = useRef<HTMLDivElement>(null);
-
-//   const generateEdgeId = (source: string, target: string) =>
-//     `${source}-${target}`;
-
-//   useEffect(() => {
-//     if (!containerRef.current) return;
-
-//     const nodeIds = nodes.map((n) => n.id);
-
-//     // Séparer les edges valides et invalides
-//     const validEdges = edges.filter(
-//       (e) => nodeIds.includes(e.source) && nodeIds.includes(e.target)
-//     );
-
-//     const invalidEdges = edges.filter(
-//       (e) => !nodeIds.includes(e.source) || !nodeIds.includes(e.target)
-//     );
-
-//     const elements = [
-//       ...nodes.map((n) => ({ data: { id: n.id, label: n.label } })),
-//       ...validEdges.map((e) => ({
-//         data: {
-//           id: generateEdgeId(e.source, e.target),
-//           source: e.source,
-//           target: e.target,
-//           label: e.label,
-//         },
-//         classes: "valid-edge",
-//       })),
-//       ...invalidEdges.map((e) => ({
-//         data: {
-//           id: generateEdgeId(e.source, e.target),
-//           source: e.source,
-//           target: e.target,
-//           label: e.label,
-//         },
-//         classes: "invalid-edge",
-//       })),
-//     ];
-
-//     if (!cyRef.current) {
-//       cyRef.current = Cytoscape({
-//         container: containerRef.current,
-//         elements,
-//         style: [
-//           {
-//             selector: "node",
-//             style: {
-//               "background-color": "#0074D9",
-//               label: "data(label)",
-//               color: "#fff",
-//               "text-valign": "center",
-//               "text-halign": "center",
-//             },
-//           },
-//           {
-//             selector: "edge.valid-edge",
-//             style: {
-//               width: 2,
-//               "line-color": "#aaa",
-//               "target-arrow-color": "#aaa",
-//               "target-arrow-shape": "triangle",
-//               label: "data(label)",
-//               "curve-style": "bezier",
-//             },
-//           },
-//           {
-//             selector: "edge.invalid-edge",
-//             style: {
-//               width: 3,
-//               "line-color": "red",
-//               "target-arrow-color": "red",
-//               "target-arrow-shape": "triangle",
-//               label: "data(label)",
-//               "curve-style": "bezier",
-//               "line-style": "dashed",
-//             },
-//           },
-//         ],
-//         layout: { name: "cose" },
-//       });
-//     } else {
-//       cyRef.current.elements().remove();
-//       cyRef.current.add(elements);
-//       cyRef.current.layout({ name: "cose" }).run();
-//     }
-//   }, [nodes, edges]);
-
-//   return <div ref={containerRef} style={{ width: "100%", height: "600px" }} />;
-// };
-
-// export default QuestionDependencyGraph;
-
-// ============================ Bon mais graphe pas Button
-// src/components/questions/QuestionDependencyGraph.tsx
-// import React, { useEffect, useRef } from "react";
-// import Cytoscape from "cytoscape";
-
-// export interface Node {
-//   id: string;
-//   label: string;
-// }
-
-// export interface Edge {
-//   source: string;
-//   target: string;
-//   label?: string;
-// }
-
-// interface Props {
-//   nodes: Node[];
-//   edges: Edge[];
-// }
-
-// const QuestionDependencyGraph: React.FC<Props> = ({ nodes, edges }) => {
-//   const cyRef = useRef<Cytoscape.Core | null>(null);
-//   const containerRef = useRef<HTMLDivElement>(null);
-
-//   const generateEdgeId = (source: string, target: string) =>
-//     `${source}-${target}`;
-
-//   useEffect(() => {
-//     if (!containerRef.current) return;
-
-//     // Filtrer edges invalides
-//     const validEdges = edges.filter(
-//       (e) =>
-//         nodes.some((n) => n.id === e.source) &&
-//         nodes.some((n) => n.id === e.target)
-//     );
-
-//     const elements = [
-//       ...nodes.map((n) => ({ data: { id: n.id, label: n.label } })),
-//       ...validEdges.map((e) => ({
-//         data: {
-//           id: generateEdgeId(e.source, e.target),
-//           source: e.source,
-//           target: e.target,
-//           label: e.label,
-//         },
-//       })),
-//     ];
-
-//     if (!cyRef.current) {
-//       cyRef.current = Cytoscape({
-//         container: containerRef.current,
-//         elements,
-//         style: [
-//           {
-//             selector: "node",
-//             style: {
-//               "background-color": "#0074D9",
-//               label: "data(label)",
-//               color: "#fff",
-//               "text-valign": "center",
-//               "text-halign": "center",
-//             },
-//           },
-//           {
-//             selector: "edge",
-//             style: {
-//               width: 2,
-//               "line-color": "#aaa",
-//               "target-arrow-color": "#aaa",
-//               "target-arrow-shape": "triangle",
-//               label: "data(label)",
-//               "curve-style": "bezier",
-//             },
-//           },
-//         ],
-//         layout: { name: "cose" },
-//       });
-//     } else {
-//       cyRef.current.elements().remove();
-//       cyRef.current.add(elements);
-//       cyRef.current.layout({ name: "cose" }).run();
-//     }
-//   }, [nodes, edges]);
-
-//   return <div ref={containerRef} style={{ width: "100%", height: "600px" }} />;
-// };
-
-// export default QuestionDependencyGraph;
-
-// ====================================
+// ========================================== TRES ButtonGroup
 // import React, { useMemo } from "react";
-// import CytoscapeComponent from "react-cytoscapejs";
+// import ReactFlow, { Background, Controls, Edge, Node } from "reactflow";
+// import "reactflow/dist/style.css";
 // import { Question } from "../../services/questionService";
-// import { Button } from "react-bootstrap";
+
+// /* ===========================
+//    TYPES STABLES (GLOBAL)
+//    =========================== */
+// const nodeTypes = {};
+// const edgeTypes = {};
 
 // interface Props {
 //   questions: Question[];
 // }
 
 // const QuestionDependencyGraph = ({ questions }: Props) => {
-//   // Création des nodes et edges pour Cytoscape
-//   const elements = useMemo(() => {
-//     const nodes = questions.map((q, index) => ({
-//       data: { id: q.id, label: `Q${q.position} - ${q.label}` },
+//   /* ===========================
+//      NODES + EDGES
+//      =========================== */
+//   const { nodes, edges } = useMemo(() => {
+//     const nodes: Node[] = questions.map((q, index) => ({
+//       id: q.id,
+//       data: {
+//         label: `Q${q.position} - ${q.label}`,
+//       },
+//       position: {
+//         x: index * 220,
+//         y: 100,
+//       },
 //     }));
 
-//     const edges: any[] = [];
+//     const edges: Edge[] = [];
+
 //     questions.forEach((q) => {
 //       if (!q.nextMap) return;
 
@@ -356,64 +182,41 @@ export default QuestionDependencyGraph;
 //         if (!targetId) return;
 
 //         edges.push({
-//           data: {
-//             id: `${q.id}-${targetId}-${option}`,
-//             source: q.id,
-//             target: targetId,
-//             label: option,
-//           },
+//           id: `${q.id}-${targetId}-${option}`,
+//           source: q.id,
+//           target: targetId,
+//           label: option,
+//           animated: true,
 //         });
 //       });
 //     });
 
-//     return [...nodes, ...edges];
+//     return { nodes, edges };
 //   }, [questions]);
 
-//   if (elements.length === 0) {
+//   if (!nodes.length) {
 //     return <p className="text-muted">Aucune dépendance à afficher</p>;
 //   }
 
 //   return (
-//     <div style={{ height: 400, border: "1px solid #ddd", borderRadius: 8 }}>
-//       <CytoscapeComponent
-//         elements={elements}
-//         style={{ width: "100%", height: "100%" }}
-//         layout={{ name: "breadthfirst", directed: true, padding: 10 }}
-//         stylesheet={[
-//           {
-//             selector: "node",
-//             style: {
-//               content: "data(label)",
-//               textValign: "center",
-//               textHalign: "center",
-//               backgroundColor: "#007bff",
-//               color: "#fff",
-//               width: 80,
-//               height: 40,
-//               borderRadius: 4,
-//             },
-//           },
-//           {
-//             selector: "edge",
-//             style: {
-//               curveStyle: "bezier",
-//               targetArrowShape: "triangle",
-//               lineColor: "#555",
-//               targetArrowColor: "#555",
-//               label: "data(label)",
-//               fontSize: 10,
-//               textRotation: "autorotate",
-//             },
-//           },
-//         ]}
-//       />
+//     <div style={{ height: 420 }} className="border rounded">
+//       <ReactFlow
+//         nodes={nodes}
+//         edges={edges}
+//         nodeTypes={nodeTypes}
+//         edgeTypes={edgeTypes}
+//         fitView
+//       >
+//         <Background />
+//         <Controls />
+//       </ReactFlow>
 //     </div>
 //   );
 // };
 
 // export default QuestionDependencyGraph;
 
-// ==================================
+// ================================== Bon
 // import React, { useMemo } from "react";
 // import ReactFlow, { Background, Controls, Edge, Node } from "reactflow";
 // import "reactflow/dist/style.css";

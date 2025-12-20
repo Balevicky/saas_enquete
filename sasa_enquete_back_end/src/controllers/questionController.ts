@@ -156,6 +156,7 @@ export class QuestionController {
       const tenantId = (req as any).tenantId;
       const { id, surveyId } = req.params;
       const { label, type, position, options, config, nextMap } = req.body;
+      console.log("req.body", req.body);
 
       const existing = await prisma.question.findFirst({
         where: { id, surveyId, tenantId },

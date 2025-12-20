@@ -8,15 +8,20 @@ interface Props {
   onUpdate: (id: string, data: Partial<Question>) => void;
   disabled?: boolean;
 }
-// console.log("id",id);
-//
-const QuestionList = ({ questions, onDelete, onUpdate, disabled }: Props) => {
+
+const QuestionList: React.FC<Props> = ({
+  questions,
+  onDelete,
+  onUpdate,
+  disabled,
+}) => {
   return (
     <div className="list-group">
       {questions.map((q) => (
         <SortableQuestionItem
           key={q.id}
           question={q}
+          allQuestions={questions} // ✅ on passe la liste complète ici
           onDelete={onDelete}
           onUpdate={onUpdate}
           disabled={disabled}
@@ -27,6 +32,37 @@ const QuestionList = ({ questions, onDelete, onUpdate, disabled }: Props) => {
 };
 
 export default QuestionList;
+
+// ========================================
+// import React from "react";
+// import { Question } from "../../services/questionService";
+// import SortableQuestionItem from "./SortableQuestionItem";
+
+// interface Props {
+//   questions: Question[];
+//   onDelete: (id: string) => void;
+//   onUpdate: (id: string, data: Partial<Question>) => void;
+//   disabled?: boolean;
+// }
+// // console.log("id",id);
+// //
+// const QuestionList = ({ questions, onDelete, onUpdate, disabled }: Props) => {
+//   return (
+//     <div className="list-group">
+//       {questions.map((q) => (
+//         <SortableQuestionItem
+//           key={q.id}
+//           question={q}
+//           onDelete={onDelete}
+//           onUpdate={onUpdate}
+//           disabled={disabled}
+//         />
+//       ))}
+//     </div>
+//   );
+// };
+
+// export default QuestionList;
 
 // ================================================
 // import React from "react";
