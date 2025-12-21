@@ -23,7 +23,11 @@ export class QuestionController {
     try {
       const tenantId = (req as any).tenantId;
       const { surveyId } = req.params;
-      const { label, type, position, options, config, nextMap } = req.body;
+      // const { label, type, position, options, config, nextMap } = req.body;
+
+      // 🆕 sectionId autorisé
+      const { label, type, position, sectionId, options, config, nextMap } =
+        req.body;
 
       const name = buildQuestionName(position, label);
 
@@ -69,6 +73,7 @@ export class QuestionController {
         data: {
           surveyId,
           tenantId,
+          sectionId, // 🆕 rattachement à une section
           label,
           type,
           position,
@@ -105,7 +110,16 @@ export class QuestionController {
         where,
         skip,
         take,
-        orderBy: { position: "asc" },
+        // orderBy: { position: "asc" },
+        // 🆕 TRI STRUCTURÉ :
+        // 1️⃣ section.position (ordre des blocs)
+        // 2️⃣ question.position (ordre interne au bloc)
+        orderBy: [{ section: { position: "asc" } }, { position: "asc" }],
+
+        // 🆕 utile pour debug / frontend
+        include: {
+          section: true,
+        },
       });
 
       const total = await prisma.question.count({ where });
@@ -155,7 +169,12 @@ export class QuestionController {
     try {
       const tenantId = (req as any).tenantId;
       const { id, surveyId } = req.params;
-      const { label, type, position, options, config, nextMap } = req.body;
+      // const { label, type, position, options, config, nextMap } = req.body;
+
+      // 🆕 sectionId accepté
+      const { label, type, position, sectionId, options, config, nextMap } =
+        req.body;
+
       console.log("req.body", req.body);
 
       const existing = await prisma.question.findFirst({
@@ -203,7 +222,15 @@ export class QuestionController {
 
       const updated = await prisma.question.update({
         where: { id, tenantId, surveyId },
-        data: { label, type, position, options, config, nextMap },
+        data: {
+          label,
+          type,
+          position,
+          sectionId, // 🆕 déplacement inter-section possible
+          options,
+          config,
+          nextMap,
+        },
       });
 
       return res.json(updated);
@@ -225,11 +252,16 @@ export class QuestionController {
       // 1️⃣ Vérifier existence
       const existing = await prisma.question.findFirst({
         where: { id: deletedId, surveyId, tenantId },
+        select: {
+          id: true,
+          sectionId: true, // 🆕 très important
+        },
       });
 
       if (!existing) {
         return res.status(404).json({ error: "Question not found" });
       }
+      const sectionId = existing.sectionId; // 🆕 très important
 
       // 2️⃣ Nettoyer les nextMap qui pointent vers la question supprimée
       const questionsWithNextMap = await prisma.question.findMany({
@@ -264,9 +296,17 @@ export class QuestionController {
 
       // 4️⃣ 🔥 Réordonner automatiquement les positions
       const remainingQuestions = await prisma.question.findMany({
-        where: { surveyId, tenantId },
+        where: {
+          surveyId,
+          tenantId,
+          // 🆕 uniquement la même section
+          ...(sectionId ? { sectionId } : { sectionId: null }), // fallback sécurité
+        },
+        // orderBy: { position: "asc" },
         orderBy: { position: "asc" },
       });
+
+      // 5️⃣ Réassigner les positions (1, 2, 3…)
 
       for (let i = 0; i < remainingQuestions.length; i++) {
         const q = remainingQuestions[i];
@@ -280,7 +320,8 @@ export class QuestionController {
         }
       }
 
-      return res.status(204).send();
+      // return res.status(204).send();
+      return res.status(200).json({ message: "Suppression effectuée" });
     } catch (err) {
       console.error(err);
       return res.status(500).json({
@@ -430,6 +471,84 @@ export class QuestionController {
   //     return res.status(500).json({ error: "Erreur suppression question" });
   //   }
   // }
+  // ======================
+  // REORDER QUESTION (Drag & Drop)
+  // POST /surveys/:surveyId/questions/:id/reorder
+  // ======================
+  static async reorder(req: Request, res: Response) {
+    try {
+      const tenantId = (req as any).tenantId;
+      const { surveyId, id: questionId } = req.params;
+      const { sourceSectionId, targetSectionId, targetPosition } = req.body;
+
+      if (targetPosition < 1)
+        return res.status(400).json({ error: "Position invalide" });
+
+      // 1️⃣ Vérifier que la question existe
+      const question = await prisma.question.findFirst({
+        where: { id: questionId, surveyId, tenantId },
+      });
+      if (!question)
+        return res.status(404).json({ error: "Question introuvable" });
+
+      // 2️⃣ Transaction pour sécurité
+      await prisma.$transaction(async (tx) => {
+        // 🔹 Réorganiser section source (décrémenter positions > ancienne position)
+        if (sourceSectionId !== null) {
+          const sourceQuestions = await tx.question.findMany({
+            where: {
+              surveyId,
+              tenantId,
+              sectionId: sourceSectionId,
+              position: { gt: question.position },
+            },
+          });
+
+          for (const q of sourceQuestions) {
+            await tx.question.update({
+              where: { id: q.id },
+              data: { position: q.position - 1 },
+            });
+          }
+        }
+
+        // 🔹 Réorganiser section cible (incrémenter positions >= targetPosition)
+        const targetQuestions = await tx.question.findMany({
+          where: {
+            surveyId,
+            tenantId,
+            sectionId: targetSectionId,
+            position: { gte: targetPosition },
+          },
+        });
+
+        for (const q of targetQuestions) {
+          await tx.question.update({
+            where: { id: q.id },
+            data: { position: q.position + 1 },
+          });
+        }
+
+        // 🔹 Mettre à jour la question déplacée
+        await tx.question.update({
+          where: { id: questionId },
+          data: {
+            sectionId: targetSectionId,
+            position: targetPosition,
+          },
+        });
+      });
+
+      return res
+        .status(200)
+        .json({ message: "Question réordonnée avec succès" });
+    } catch (err) {
+      console.error(err);
+      return res
+        .status(500)
+        .json({ error: "Erreur lors du déplacement de la question" });
+    }
+  }
 }
 
 // =================================

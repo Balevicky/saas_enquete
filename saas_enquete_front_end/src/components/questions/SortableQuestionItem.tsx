@@ -344,6 +344,769 @@ const SortableQuestionItem: React.FC<Props> = ({
 };
 
 export default SortableQuestionItem;
+// =====================================
+// import React, { useState } from "react";
+// import { useSortable } from "@dnd-kit/sortable";
+// import { CSS } from "@dnd-kit/utilities";
+// import { Question } from "../../services/questionService";
+// import { QuestionType } from "../../types/question";
+
+// interface Props {
+//   question: Question;
+//   index?: number;
+//   disabled?: boolean;
+//   onDelete?: (id: string) => void;
+//   onUpdate?: (id: string, data: Partial<Question>) => void;
+// }
+
+// /** ✅ TYPES OFFICIELS */
+// const QUESTION_TYPES: { value: QuestionType; label: string }[] = [
+//   { value: "TEXT", label: "Texte court" },
+//   { value: "TEXTAREA", label: "Texte long" },
+//   { value: "NUMBER", label: "Nombre" },
+//   { value: "SCALE", label: "Échelle" },
+//   { value: "SINGLE_CHOICE", label: "Choix unique" },
+//   { value: "MULTIPLE_CHOICE", label: "Choix multiple" },
+//   { value: "DATE", label: "Date" },
+//   { value: "EMAIL", label: "Email" },
+// ];
+
+// const SortableQuestionItem: React.FC<Props> = ({
+//   question,
+//   index,
+//   disabled,
+//   onDelete,
+//   onUpdate,
+// }) => {
+//   const { attributes, listeners, setNodeRef, transform, transition } =
+//     useSortable({ id: question.id, disabled });
+
+//   const [editing, setEditing] = useState(false);
+//   const [label, setLabel] = useState(question.label);
+//   const [type, setType] = useState<QuestionType>(question.type);
+
+//   const style = {
+//     transform: CSS.Transform.toString(transform),
+//     transition,
+//     border: "1px solid #ddd",
+//     padding: "10px",
+//     borderRadius: "6px",
+//     marginBottom: "8px",
+//     background: "#fff",
+//     display: "flex",
+//     alignItems: "flex-start",
+//     gap: "8px",
+//   };
+
+//   const save = () => {
+//     if (!onUpdate) return;
+
+//     onUpdate(question.id, {
+//       label: label.trim(),
+//       type,
+//     });
+
+//     setEditing(false);
+//   };
+
+//   const cancel = () => {
+//     setLabel(question.label);
+//     setType(question.type);
+//     setEditing(false);
+//   };
+
+//   return (
+//     <div ref={setNodeRef} style={style}>
+//       {/* 🟦 Drag handle */}
+//       <span
+//         {...attributes}
+//         {...listeners}
+//         className="text-muted"
+//         style={{ cursor: "grab", paddingTop: 6 }}
+//       >
+//         ⠿
+//       </span>
+
+//       {/* 🟩 Contenu */}
+//       <div className="flex-grow-1">
+//         {editing ? (
+//           <>
+//             {/* LABEL */}
+//             <input
+//               className="form-control form-control-sm mb-2"
+//               value={label}
+//               autoFocus
+//               onChange={(e) => setLabel(e.target.value)}
+//               onKeyDown={(e) => e.key === "Escape" && cancel()}
+//               onBlur={save}
+//             />
+
+//             {/* TYPE */}
+//             <select
+//               className="form-select form-select-sm"
+//               value={type}
+//               onChange={(e) => setType(e.target.value as QuestionType)}
+//             >
+//               {QUESTION_TYPES.map((t) => (
+//                 <option key={t.value} value={t.value}>
+//                   {t.label}
+//                 </option>
+//               ))}
+//             </select>
+//           </>
+//         ) : (
+//           <>
+//             <div>
+//               {index !== undefined && (
+//                 <strong className="me-1">{index + 1}.</strong>
+//               )}
+//               {question.label}
+//             </div>
+//             <small className="text-muted">
+//               {QUESTION_TYPES.find((t) => t.value === question.type)?.label}
+//             </small>
+//           </>
+//         )}
+//       </div>
+
+//       {/* 🟥 Actions */}
+//       <div className="d-flex gap-1">
+//         {!editing && onUpdate && (
+//           <button
+//             className="btn btn-sm btn-outline-primary"
+//             onClick={() => setEditing(true)}
+//           >
+//             ✏️
+//           </button>
+//         )}
+//         {onDelete && (
+//           <button
+//             className="btn btn-sm btn-outline-danger"
+//             onClick={() => onDelete(question.id)}
+//           >
+//             🗑️
+//           </button>
+//         )}
+//       </div>
+//     </div>
+//   );
+// };
+
+// export default SortableQuestionItem;
+
+// ============================
+// import React, { useState } from "react";
+// import { useSortable } from "@dnd-kit/sortable";
+// import { CSS } from "@dnd-kit/utilities";
+// import { Question } from "../../services/questionService";
+
+// interface Props {
+//   question: Question;
+//   index?: number;
+//   disabled?: boolean;
+//   onDelete?: (id: string) => void;
+//   onUpdate?: (id: string, data: Partial<Question>) => void;
+// }
+
+// const SortableQuestionItem: React.FC<Props> = ({
+//   question,
+//   index,
+//   disabled,
+//   onDelete,
+//   onUpdate,
+// }) => {
+//   const { attributes, listeners, setNodeRef, transform, transition } =
+//     useSortable({
+//       id: question.id,
+//       disabled,
+//     });
+
+//   const [isEditing, setIsEditing] = useState(false);
+//   const [value, setValue] = useState(question.label);
+
+//   const style = {
+//     transform: CSS.Transform.toString(transform),
+//     transition,
+//     border: "1px solid #ddd",
+//     padding: "8px",
+//     borderRadius: "4px",
+//     marginBottom: "6px",
+//     backgroundColor: "#fff",
+//     display: "flex",
+//     alignItems: "center",
+//     justifyContent: "space-between",
+//     cursor: disabled ? "default" : "grab",
+//   };
+
+//   const save = () => {
+//     if (!onUpdate) return;
+//     if (value.trim() && value !== question.label) {
+//       onUpdate(question.id, { label: value.trim() });
+//     }
+//     setIsEditing(false);
+//   };
+
+//   const cancel = () => {
+//     setValue(question.label);
+//     setIsEditing(false);
+//   };
+
+//   return (
+//     <div ref={setNodeRef} style={style}>
+//       {/* 🔹 Drag handle */}
+//       <span
+//         {...attributes}
+//         {...listeners}
+//         className="me-2 text-muted"
+//         style={{ cursor: "grab" }}
+//       >
+//         ⠿
+//       </span>
+
+//       {/* 🔹 Contenu */}
+//       <div className="flex-grow-1 me-2">
+//         {isEditing ? (
+//           <input
+//             className="form-control form-control-sm"
+//             autoFocus
+//             value={value}
+//             onChange={(e) => setValue(e.target.value)}
+//             onKeyDown={(e) => {
+//               if (e.key === "Enter") save();
+//               if (e.key === "Escape") cancel();
+//             }}
+//             onBlur={save}
+//           />
+//         ) : (
+//           <span>
+//             {index !== undefined && (
+//               <strong className="me-1">{index + 1}.</strong>
+//             )}
+//             {question.label}
+//           </span>
+//         )}
+//       </div>
+
+//       {/* 🔹 Actions */}
+//       <div className="d-flex gap-1">
+//         {!isEditing && onUpdate && (
+//           <button
+//             className="btn btn-sm btn-outline-primary"
+//             onClick={() => setIsEditing(true)}
+//           >
+//             ✏️
+//           </button>
+//         )}
+//         {onDelete && (
+//           <button
+//             className="btn btn-sm btn-outline-danger"
+//             onClick={() => onDelete(question.id)}
+//           >
+//             🗑️
+//           </button>
+//         )}
+//       </div>
+//     </div>
+//   );
+// };
+
+// export default SortableQuestionItem;
+
+// ====================================== Bon mais npas de suprresion et mise ajour
+// import React from "react";
+// import { useSortable } from "@dnd-kit/sortable";
+// import { CSS } from "@dnd-kit/utilities";
+// import { Question } from "../../services/questionService";
+
+// interface Props {
+//   question: Question;
+//   index?: number; // pour numéroter
+//   disabled?: boolean;
+//   onDelete?: (id: string) => void;
+//   onUpdate?: (id: string, data: Partial<Question>) => void;
+// }
+
+// const SortableQuestionItem: React.FC<Props> = ({
+//   question,
+//   index,
+//   disabled,
+//   onDelete,
+//   onUpdate,
+// }) => {
+//   const { attributes, listeners, setNodeRef, transform, transition } =
+//     useSortable({
+//       id: question.id,
+//       disabled,
+//     });
+
+//   const style = {
+//     transform: CSS.Transform.toString(transform),
+//     transition,
+//     border: "1px solid #ddd",
+//     padding: "8px",
+//     borderRadius: "4px",
+//     marginBottom: "4px",
+//     backgroundColor: "#fff",
+//     display: "flex",
+//     alignItems: "center",
+//     justifyContent: "space-between",
+//     cursor: disabled ? "default" : "grab",
+//   };
+
+//   const handleEdit = () => {
+//     if (!onUpdate) return;
+//     const newLabel = prompt(
+//       "Modifier le texte de la question :",
+//       question.label
+//     );
+//     if (newLabel && newLabel !== question.label) {
+//       onUpdate(question.id, { label: newLabel });
+//     }
+//   };
+
+//   return (
+//     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+//       <span>
+//         {index !== undefined ? `${index + 1}. ` : ""}
+//         {question.label}
+//       </span>
+//       <div>
+//         {onUpdate && (
+//           <button
+//             className="btn btn-sm btn-outline-primary me-1"
+//             onClick={handleEdit}
+//           >
+//             ✏️
+//           </button>
+//         )}
+//         {onDelete && (
+//           <button
+//             className="btn btn-sm btn-outline-danger"
+//             onClick={() => onDelete(question.id)}
+//           >
+//             🗑️
+//           </button>
+//         )}
+//       </div>
+//     </div>
+//   );
+// };
+
+// export default SortableQuestionItem;
+
+// ======================================
+
+// import React from "react";
+// import { useSortable } from "@dnd-kit/sortable";
+// import { CSS } from "@dnd-kit/utilities";
+// import { Question } from "../../services/questionService";
+
+// interface Props {
+//   question: Question;
+//   disabled?: boolean;
+//   onDelete?: (id: string) => void;
+//   onUpdate?: (id: string, data: Partial<Question>) => void;
+// }
+
+// const SortableQuestionItem: React.FC<Props> = ({
+//   question,
+//   disabled,
+//   onDelete,
+//   onUpdate,
+// }) => {
+//   const { attributes, listeners, setNodeRef, transform, transition } =
+//     useSortable({
+//       id: question.id,
+//       disabled,
+//     });
+
+//   const style = {
+//     transform: CSS.Transform.toString(transform),
+//     transition,
+//     border: "1px solid #ddd",
+//     padding: "8px",
+//     borderRadius: "4px",
+//     marginBottom: "4px",
+//     backgroundColor: "#fff",
+//     display: "flex",
+//     alignItems: "center",
+//     justifyContent: "space-between",
+//     cursor: disabled ? "default" : "grab",
+//   };
+
+//   return (
+//     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+//       <span>{question.label}</span>
+//       <div>
+//         {onUpdate && (
+//           <button
+//             className="btn btn-sm btn-outline-primary me-1"
+//             onClick={() => onUpdate(question.id, {})} // adapter selon ton besoin
+//           >
+//             ✏️
+//           </button>
+//         )}
+//         {onDelete && (
+//           <button
+//             className="btn btn-sm btn-outline-danger"
+//             onClick={() => onDelete(question.id)}
+//           >
+//             🗑️
+//           </button>
+//         )}
+//       </div>
+//     </div>
+//   );
+// };
+
+// export default SortableQuestionItem;
+
+// ============================== Bon mais pas de suppression
+// import React, { useEffect, useState } from "react";
+// import { useSortable } from "@dnd-kit/sortable";
+// import { CSS } from "@dnd-kit/utilities";
+// import { Question } from "../../services/questionService";
+// import { QuestionType } from "../../types/question";
+// import QuestionPreview from "./QuestionPreview"; // ✅ AJOUT
+// import "./SortableQuestionItem.css";
+
+// interface Props {
+//   question: Question;
+//   allQuestions: Question[];
+//   onDelete: (id: string) => void;
+//   onUpdate: (id: string, data: Partial<Question>) => void;
+//   disabled?: boolean;
+// }
+
+// const QUESTION_TYPES: QuestionType[] = [
+//   "TEXT",
+//   "TEXTAREA",
+//   "NUMBER",
+//   "SCALE",
+//   "SINGLE_CHOICE",
+//   "MULTIPLE_CHOICE",
+//   "DATE",
+//   "EMAIL",
+//   "PHONE",
+// ];
+
+// const SortableQuestionItem: React.FC<Props> = ({
+//   question,
+//   allQuestions,
+//   onDelete,
+//   onUpdate,
+//   disabled,
+// }) => {
+//   const {
+//     attributes,
+//     listeners,
+//     setNodeRef,
+//     transform,
+//     transition,
+//     isDragging,
+//   } = useSortable({ id: question.id });
+
+//   const style = {
+//     transform: CSS.Transform.toString(transform),
+//     transition,
+//     backgroundColor: isDragging ? "#e0f7fa" : "white", // ← couleur pendant drag
+//   };
+
+//   const [isEditing, setIsEditing] = useState(false);
+//   const [showPreview, setShowPreview] = useState(false); // ✅ AJOUT
+//   const [showModal, setShowModal] = useState(false);
+//   const [label, setLabel] = useState(question.label);
+//   const [type, setType] = useState<QuestionType>(question.type);
+//   const [options, setOptions] = useState<string[]>(question.options || []);
+//   const [config, setConfig] = useState(question.config);
+//   const [nextMap, setNextMap] = useState<Record<string, string>>(
+//     question.nextMap || {}
+//   );
+//   const [toast, setToast] = useState<{
+//     message: string;
+//     type: "success" | "danger";
+//   } | null>(null);
+//   const [errors, setErrors] = useState<string[]>([]);
+
+//   // Synchroniser nextMap quand options changent
+//   useEffect(() => {
+//     if (type !== "SINGLE_CHOICE") {
+//       setNextMap({});
+//       return;
+//     }
+
+//     setNextMap((prev) => {
+//       const cleaned: Record<string, string> = {};
+//       options.forEach((opt) => {
+//         if (opt.trim()) cleaned[opt] = prev[opt] || "";
+//       });
+//       return cleaned;
+//     });
+//   }, [options, type]);
+
+//   // Auto close toast
+//   useEffect(() => {
+//     if (toast) {
+//       const timer = setTimeout(() => setToast(null), 3000);
+//       return () => clearTimeout(timer);
+//     }
+//   }, [toast]);
+
+//   const validate = (): boolean => {
+//     const newErrors: string[] = [];
+
+//     if (!label.trim()) newErrors.push("Le libellé est requis.");
+
+//     if (type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE") {
+//       const filledOptions = options.filter((o) => o.trim());
+//       if (filledOptions.length === 0)
+//         newErrors.push("Au moins une option est requise.");
+
+//       Object.entries(nextMap).forEach(([opt, qid]) => {
+//         if (
+//           qid &&
+//           !allQuestions.find(
+//             (q) => q.id === qid && q.position > question.position
+//           )
+//         ) {
+//           newErrors.push(
+//             `L'option "${opt}" pointe vers une question invalide.`
+//           );
+//         }
+//       });
+//     }
+
+//     setErrors(newErrors);
+
+//     if (newErrors.length) {
+//       setToast({ message: newErrors.join(" "), type: "danger" });
+//       return false;
+//     }
+
+//     return true;
+//   };
+
+//   const handleSave = () => {
+//     if (!validate()) return;
+
+//     const payload: Partial<Question> = {
+//       label,
+//       type,
+//       config,
+//       position: question.position,
+//     };
+
+//     if (type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE") {
+//       payload.options = options.filter((o) => o.trim());
+//     }
+
+//     if (type === "SINGLE_CHOICE") {
+//       const cleanedNextMap: Record<string, string> = {};
+//       Object.entries(nextMap).forEach(([key, value]) => {
+//         if (payload.options?.includes(key) && value) {
+//           cleanedNextMap[key] = value;
+//         }
+//       });
+//       payload.nextMap = cleanedNextMap;
+//     }
+
+//     onUpdate(question.id, payload);
+//     setIsEditing(false);
+//     setErrors([]);
+//     setToast({
+//       message: "Question sauvegardée avec succès !",
+//       type: "success",
+//     });
+//   };
+
+//   const handleDelete = () => {
+//     onDelete(question.id);
+//     setShowModal(false);
+//     setToast({
+//       message: "Question supprimée avec succès !",
+//       type: "success",
+//     });
+//   };
+
+//   return (
+//     <div
+//       ref={setNodeRef}
+//       style={style}
+//       className="list-group-item mb-2 rounded shadow-sm"
+//     >
+//       <div className="d-flex justify-content-between align-items-start">
+//         {!disabled && (
+//           <span
+//             className="me-2 text-muted"
+//             style={{ cursor: "grab" }}
+//             {...attributes}
+//             {...listeners}
+//           >
+//             ☰
+//           </span>
+//         )}
+
+//         <div className="flex-grow-1">
+//           {isEditing ? (
+//             <>
+//               <input
+//                 className="form-control mb-2"
+//                 value={label}
+//                 onChange={(e) => setLabel(e.target.value)}
+//               />
+
+//               <select
+//                 className="form-select mb-2"
+//                 value={type}
+//                 onChange={(e) => setType(e.target.value as QuestionType)}
+//               >
+//                 {QUESTION_TYPES.map((t) => (
+//                   <option key={t} value={t}>
+//                     {t}
+//                   </option>
+//                 ))}
+//               </select>
+
+//               {/* {(type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE") && ( */}
+//               {(type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE") && (
+//                 <div className="mb-2">
+//                   <strong>Options</strong>
+//                   {options.map((opt, i) => (
+//                     <div key={i} className="input-group mb-1">
+//                       <input
+//                         className="form-control"
+//                         value={opt}
+//                         onChange={(e) => {
+//                           const copy = [...options];
+//                           copy[i] = e.target.value;
+//                           setOptions(copy);
+//                         }}
+//                       />
+//                       <button
+//                         className="btn btn-outline-danger"
+//                         onClick={() =>
+//                           setOptions(options.filter((_, idx) => idx !== i))
+//                         }
+//                         type="button"
+//                       >
+//                         ✖
+//                       </button>
+//                     </div>
+//                   ))}
+//                   <button
+//                     // className="btn btn-sm btn-outline-primary"
+//                     className="btn btn-sm btn-primary"
+//                     onClick={() => setOptions([...options, ""])}
+//                     type="button"
+//                   >
+//                     + Ajouter option
+//                   </button>
+//                 </div>
+//               )}
+
+//               {type === "SINGLE_CHOICE" &&
+//                 options.filter((o) => o.trim()).length > 0 && (
+//                   <div className="mb-2">
+//                     <strong>Condition SIMPLE (nextMap)</strong>
+//                     {options.map((opt) => (
+//                       <div key={opt} className="input-group mb-1">
+//                         <span className="input-group-text">{opt} →</span>
+//                         <select
+//                           className="form-select"
+//                           value={nextMap[opt] || ""}
+//                           onChange={(e) =>
+//                             setNextMap((prev) => ({
+//                               ...prev,
+//                               [opt]: e.target.value,
+//                             }))
+//                           }
+//                         >
+//                           <option value="">
+//                             -- Choisir la question suivante --
+//                           </option>
+//                           {allQuestions
+//                             .filter(
+//                               (q) =>
+//                                 q.position > question.position &&
+//                                 q.id !== question.id
+//                             )
+//                             .map((q) => (
+//                               <option key={q.id} value={q.id}>
+//                                 {q.position}. {q.label}
+//                               </option>
+//                             ))}
+//                         </select>
+//                       </div>
+//                     ))}
+//                   </div>
+//                 )}
+
+//               <button
+//                 className="btn btn-sm btn-success me-2"
+//                 onClick={handleSave}
+//               >
+//                 💾 Sauver
+//               </button>
+//               <button
+//                 className="btn btn-sm btn-secondary"
+//                 onClick={() => setIsEditing(false)}
+//               >
+//                 ❌ Annuler
+//               </button>
+//             </>
+//           ) : (
+//             <>
+//               <strong>
+//                 {question.position}. {question.label}
+//               </strong>
+//               <span className="badge bg-info ms-2">{question.type}</span>
+
+//               {/* 👁️ BOUTON APERÇU */}
+//               <button
+//                 className="btn btn-sm btn-outline-secondary ms-2"
+//                 onClick={() => setShowPreview((p) => !p)}
+//               >
+//                 👁️ {showPreview ? "Masquer aperçu" : "Afficher aperçu"}
+//               </button>
+//             </>
+//           )}
+
+//           {/* 👁️ PREVIEW */}
+//           {showPreview && !isEditing && (
+//             <div className="mt-2">
+//               <QuestionPreview
+//                 label={label}
+//                 type={type}
+//                 options={options}
+//                 config={config}
+//                 nextMap={nextMap}
+//               />
+//             </div>
+//           )}
+//         </div>
+
+//         {!disabled && !isEditing && (
+//           <div className="btn-group btn-group-sm ms-2">
+//             <button
+//               className="btn btn-outline-primary"
+//               onClick={() => setIsEditing(true)}
+//             >
+//               ✏️
+//             </button>
+//             <button
+//               className="btn btn-outline-danger"
+//               onClick={() => setShowModal(true)}
+//             >
+//               🗑️
+//             </button>
+//           </div>
+//         )}
+//       </div>
+//     </div>
+//   );
+// };
+
+// export default SortableQuestionItem;
 
 // // ===================================== BON avec confirmation à la supression avec css avec validation  et affiche une les questions suivantes dans le conditionnel, pas changement couleur de fond pour la question en Drag&drop
 // import React, { useEffect, useState } from "react";

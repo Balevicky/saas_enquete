@@ -5,6 +5,7 @@ import api from "../utils/api";
 export interface Question {
   id: string;
   surveyId: string;
+  sectionId?: string | null; // 🆕 sectionId
   label: string;
   type: QuestionType;
   position: number;
@@ -42,6 +43,7 @@ const questionService = {
       label: string;
       type: QuestionType;
       position: number;
+      sectionId?: string | null; // 🆕 sectionId
       options?: string[];
       config?: { min: number; max: number };
       nextMap?: Record<string, string>;
@@ -62,6 +64,7 @@ const questionService = {
       label: string;
       type: QuestionType;
       position: number;
+      sectionId?: string | null; // 🆕 sectionId
       options?: string[];
       config?: { min: number; max: number };
       nextMap?: Record<string, string>;
@@ -77,9 +80,115 @@ const questionService = {
   remove: async (tenantSlug: string, surveyId: string, id: string) => {
     await api.delete(`/t/${tenantSlug}/surveys/${surveyId}/questions/${id}`);
   },
+
+  // ======================
+  // 🆕 REORDER QUESTION (Drag & Drop)
+  // ======================
+  reorder: async (
+    tenantSlug: string,
+    surveyId: string,
+    questionId: string,
+    sourceSectionId: string | null,
+    targetSectionId: string | null,
+    targetPosition: number
+  ) => {
+    await api.post(
+      `/t/${tenantSlug}/surveys/${surveyId}/questions/${questionId}/reorder`,
+      {
+        sourceSectionId,
+        targetSectionId,
+        targetPosition, // 1-based
+      }
+    );
+  },
 };
 
 export default questionService;
+
+// ================================= Bon mais sens section
+// import { QuestionType } from "../types/question";
+// import api from "../utils/api";
+
+// // 🔹 Nouveau type Question adapté Phase B – SIMPLE
+// export interface Question {
+//   id: string;
+//   surveyId: string;
+//   label: string;
+//   type: QuestionType;
+//   position: number;
+//   options?: string[]; // pour SINGLE_CHOICE / MULTIPLE_CHOICE
+//   config?: { min: number; max: number }; // pour SCALE
+//   nextMap?: Record<string, string>; // condition SIMPLE : quelle réponse mène à quelle question
+// }
+
+// export interface QuestionListResponse {
+//   data: Question[];
+//   meta: {
+//     total: number;
+//     page: number;
+//     perPage: number;
+//   };
+// }
+
+// const questionService = {
+//   list: async (
+//     tenantSlug: string,
+//     surveyId: string,
+//     params?: any
+//   ): Promise<QuestionListResponse> => {
+//     const res = await api.get<QuestionListResponse>(
+//       `/t/${tenantSlug}/surveys/${surveyId}/questions`,
+//       { params }
+//     );
+//     return res.data;
+//   },
+
+//   create: async (
+//     tenantSlug: string,
+//     surveyId: string,
+//     data: {
+//       label: string;
+//       type: QuestionType;
+//       position: number;
+//       options?: string[];
+//       config?: { min: number; max: number };
+//       nextMap?: Record<string, string>;
+//     }
+//   ) => {
+//     const res = await api.post(
+//       `/t/${tenantSlug}/surveys/${surveyId}/questions`,
+//       data
+//     );
+//     return res.data;
+//   },
+
+//   update: async (
+//     tenantSlug: string,
+//     surveyId: string,
+//     id: string,
+//     data: Partial<{
+//       label: string;
+//       type: QuestionType;
+//       position: number;
+//       options?: string[];
+//       config?: { min: number; max: number };
+//       nextMap?: Record<string, string>;
+//     }>
+//   ) => {
+//     const res = await api.put(
+//       `/t/${tenantSlug}/surveys/${surveyId}/questions/${id}`,
+//       data
+//     );
+//     return res.data;
+//   },
+
+//   remove: async (tenantSlug: string, surveyId: string, id: string) => {
+//     await api.delete(`/t/${tenantSlug}/surveys/${surveyId}/questions/${id}`);
+//   },
+
+// };
+
+// export default questionService;
 
 // ================================================
 // import { QuestionType } from "../types/question";

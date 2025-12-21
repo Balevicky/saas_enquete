@@ -13,6 +13,7 @@ import respondentRoutes from "./respondentRoutes";
 import responseRoutes from "./responseRoutes";
 import surveyResponseRoutes from "./surveyResponseRoutes";
 import surveyBuilderRoutes from "./surveyBuilderRoutes";
+import sectionRoutes from "./sectionRoutes";
 
 // import respondentRoutes from "./routes/respondentRoute";
 const router = Router();
@@ -34,6 +35,8 @@ router.use("/t/:slug", surveyRoutes);
 // router.use("/", surveyRoutes);
 router.use("/t/:slug", questionRoutes);
 router.use("/t/:slug", respondentRoutes);
+router.use("/t/:slug", sectionRoutes);
+// router.use("/", sectionRoutes);
 router.use("/", responseRoutes);
 router.use("/", surveyResponseRoutes);
 router.use("", surveyBuilderRoutes);

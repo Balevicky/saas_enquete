@@ -43,5 +43,10 @@ router.delete(
   requireRole(["OWNER", "ADMIN"]),
   QuestionController.remove
 );
+router.post(
+  "/surveys/:surveyId/questions/:id/reorder",
+  requireRole(["OWNER", "ADMIN"]),
+  QuestionController.reorder
+);
 
 export default router;
