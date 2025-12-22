@@ -475,78 +475,272 @@ export class QuestionController {
   // REORDER QUESTION (Drag & Drop)
   // POST /surveys/:surveyId/questions/:id/reorder
   // ======================
+  // static async reorder(req: Request, res: Response) {
+  //   try {
+  //     const tenantId = (req as any).tenantId;
+  //     const { surveyId, id: questionId } = req.params;
+  //     const { sourceSectionId, targetSectionId, targetPosition } = req.body;
+
+  //     if (targetPosition < 1)
+  //       return res.status(400).json({ error: "Position invalide" });
+
+  //     // 1️⃣ Vérifier que la question existe
+  //     const question = await prisma.question.findFirst({
+  //       where: { id: questionId, surveyId, tenantId },
+  //     });
+  //     if (!question)
+  //       return res.status(404).json({ error: "Question introuvable" });
+
+  //     // 2️⃣ Transaction pour sécurité
+  //     await prisma.$transaction(async (tx) => {
+  //       // 🔹 Réorganiser section source (décrémenter positions > ancienne position)
+  //       if (sourceSectionId !== null) {
+  //         const sourceQuestions = await tx.question.findMany({
+  //           where: {
+  //             surveyId,
+  //             tenantId,
+  //             sectionId: sourceSectionId,
+  //             position: { gt: question.position },
+  //           },
+  //         });
+
+  //         for (const q of sourceQuestions) {
+  //           await tx.question.update({
+  //             where: { id: q.id },
+  //             data: { position: q.position - 1 },
+  //           });
+  //         }
+  //       }
+
+  //       // 🔹 Réorganiser section cible (incrémenter positions >= targetPosition)
+  //       const targetQuestions = await tx.question.findMany({
+  //         where: {
+  //           surveyId,
+  //           tenantId,
+  //           sectionId: targetSectionId,
+  //           position: { gte: targetPosition },
+  //         },
+  //       });
+
+  //       for (const q of targetQuestions) {
+  //         await tx.question.update({
+  //           where: { id: q.id },
+  //           data: { position: q.position + 1 },
+  //         });
+  //       }
+
+  //       // 🔹 Mettre à jour la question déplacée
+  //       await tx.question.update({
+  //         where: { id: questionId },
+  //         data: {
+  //           sectionId: targetSectionId,
+  //           position: targetPosition,
+  //         },
+  //       });
+  //     });
+
+  //     return res
+  //       .status(200)
+  //       .json({ message: "Question réordonnée avec succès" });
+  //   } catch (err) {
+  //     console.error(err);
+  //     return res
+  //       .status(500)
+  //       .json({ error: "Erreur lors du déplacement de la question" });
+  //   }
+  // }//changer le 22/12/2015
+  // ====================
+  // static async reorder(req: Request, res: Response) {
+  //   try {
+  //     const tenantId = (req as any).tenantId;
+  //     const { surveyId, id: questionId } = req.params;
+  //     const { sourceSectionId, targetSectionId, targetPosition } = req.body;
+  //     console.log("req.body", req.body);
+
+  //     if (targetPosition < 1) {
+  //       return res.status(400).json({ error: "Position invalide" });
+  //     }
+
+  //     // 1️⃣ Vérifier que la question existe
+  //     const question = await prisma.question.findFirst({
+  //       where: { id: questionId, surveyId, tenantId },
+  //     });
+
+  //     if (!question) {
+  //       return res.status(404).json({ error: "Question introuvable" });
+  //     }
+
+  //     await prisma.$transaction(async (tx) => {
+  //       const sourceSectionKey = sourceSectionId ?? null;
+  //       const targetSectionKey = targetSectionId ?? null;
+
+  //       // 2️⃣ Charger les questions source
+  //       const sourceQuestions = await tx.question.findMany({
+  //         where: {
+  //           surveyId,
+  //           tenantId,
+  //           sectionId: sourceSectionKey,
+  //         },
+  //         orderBy: { position: "asc" },
+  //       });
+  //       console.log("sourceQuestions", sourceQuestions);
+
+  //       // 3️⃣ Charger les questions cible (si différente)
+  //       const targetQuestions =
+  //         sourceSectionKey === targetSectionKey
+  //           ? sourceQuestions
+  //           : await tx.question.findMany({
+  //               where: {
+  //                 surveyId,
+  //                 tenantId,
+  //                 sectionId: targetSectionKey,
+  //               },
+  //               orderBy: { position: "asc" },
+  //             });
+  //       console.log("targetQuestions", targetQuestions);
+
+  //       // 4️⃣ Retirer la question de la source
+  //       const filteredSource = sourceQuestions.filter(
+  //         (q) => q.id !== questionId
+  //       );
+
+  //       // 5️⃣ Insérer dans la cible à la bonne position
+  //       const insertIndex = Math.min(
+  //         Math.max(targetPosition - 1, 0),
+  //         targetQuestions.length
+  //       );
+
+  //       const updatedTarget = [...targetQuestions];
+  //       updatedTarget.splice(insertIndex, 0, {
+  //         ...question,
+  //         sectionId: targetSectionKey,
+  //       });
+
+  //       // 6️⃣ Réassigner positions SOURCE
+  //       for (let i = 0; i < filteredSource.length; i++) {
+  //         await tx.question.update({
+  //           where: { id: filteredSource[i].id },
+  //           data: { position: i + 1 },
+  //         });
+  //       }
+
+  //       // 7️⃣ Réassigner positions TARGET
+  //       for (let i = 0; i < updatedTarget.length; i++) {
+  //         await tx.question.update({
+  //           where: { id: updatedTarget[i].id },
+  //           data: {
+  //             sectionId: targetSectionKey,
+  //             position: i + 1,
+  //           },
+  //         });
+  //       }
+  //     });
+
+  //     return res
+  //       .status(200)
+  //       .json({ message: "Question réordonnée avec succès" });
+  //   } catch (err) {
+  //     console.error(err);
+  //     return res.status(500).json({
+  //       error: "Erreur lors du déplacement de la question",
+  //     });
+  //   }
+  // }// pas bon
+  //  =================
   static async reorder(req: Request, res: Response) {
     try {
       const tenantId = (req as any).tenantId;
       const { surveyId, id: questionId } = req.params;
       const { sourceSectionId, targetSectionId, targetPosition } = req.body;
 
-      if (targetPosition < 1)
+      if (targetPosition < 1) {
         return res.status(400).json({ error: "Position invalide" });
+      }
 
       // 1️⃣ Vérifier que la question existe
       const question = await prisma.question.findFirst({
         where: { id: questionId, surveyId, tenantId },
       });
-      if (!question)
+
+      if (!question) {
         return res.status(404).json({ error: "Question introuvable" });
+      }
 
-      // 2️⃣ Transaction pour sécurité
       await prisma.$transaction(async (tx) => {
-        // 🔹 Réorganiser section source (décrémenter positions > ancienne position)
-        if (sourceSectionId !== null) {
-          const sourceQuestions = await tx.question.findMany({
-            where: {
-              surveyId,
-              tenantId,
-              sectionId: sourceSectionId,
-              position: { gt: question.position },
-            },
-          });
+        const sourceSectionKey = sourceSectionId ?? null;
+        const targetSectionKey = targetSectionId ?? null;
 
-          for (const q of sourceQuestions) {
-            await tx.question.update({
-              where: { id: q.id },
-              data: { position: q.position - 1 },
-            });
-          }
-        }
-
-        // 🔹 Réorganiser section cible (incrémenter positions >= targetPosition)
-        const targetQuestions = await tx.question.findMany({
+        // 2️⃣ Charger TOUTES les questions source (ordonnées)
+        const sourceQuestions = await tx.question.findMany({
           where: {
             surveyId,
             tenantId,
-            sectionId: targetSectionId,
-            position: { gte: targetPosition },
+            sectionId: sourceSectionKey,
           },
+          orderBy: { position: "asc" },
         });
 
-        for (const q of targetQuestions) {
+        // 3️⃣ Retirer la question déplacée de la source
+        const cleanedSource = sourceQuestions.filter(
+          (q) => q.id !== questionId
+        );
+
+        // 4️⃣ Charger les questions cible (SANS la question)
+        const targetQuestions =
+          sourceSectionKey === targetSectionKey
+            ? cleanedSource
+            : (
+                await tx.question.findMany({
+                  where: {
+                    surveyId,
+                    tenantId,
+                    sectionId: targetSectionKey,
+                  },
+                  orderBy: { position: "asc" },
+                })
+              ).filter((q) => q.id !== questionId);
+
+        // 5️⃣ Calculer l’index d’insertion sécurisé
+        const insertIndex = Math.min(
+          Math.max(targetPosition - 1, 0),
+          targetQuestions.length
+        );
+
+        // 6️⃣ Construire la nouvelle liste cible
+        const updatedTarget = [...targetQuestions];
+        updatedTarget.splice(insertIndex, 0, {
+          ...question,
+          sectionId: targetSectionKey,
+        });
+
+        // 7️⃣ Réassigner positions SOURCE (1..N)
+        for (let i = 0; i < cleanedSource.length; i++) {
           await tx.question.update({
-            where: { id: q.id },
-            data: { position: q.position + 1 },
+            where: { id: cleanedSource[i].id },
+            data: { position: i + 1 },
           });
         }
 
-        // 🔹 Mettre à jour la question déplacée
-        await tx.question.update({
-          where: { id: questionId },
-          data: {
-            sectionId: targetSectionId,
-            position: targetPosition,
-          },
-        });
+        // 8️⃣ Réassigner positions TARGET (1..N)
+        for (let i = 0; i < updatedTarget.length; i++) {
+          await tx.question.update({
+            where: { id: updatedTarget[i].id },
+            data: {
+              sectionId: targetSectionKey,
+              position: i + 1,
+            },
+          });
+        }
       });
 
-      return res
-        .status(200)
-        .json({ message: "Question réordonnée avec succès" });
+      return res.status(200).json({
+        message: "Question réordonnée avec succès",
+      });
     } catch (err) {
       console.error(err);
-      return res
-        .status(500)
-        .json({ error: "Erreur lors du déplacement de la question" });
+      return res.status(500).json({
+        error: "Erreur lors du déplacement de la question",
+      });
     }
   }
 }

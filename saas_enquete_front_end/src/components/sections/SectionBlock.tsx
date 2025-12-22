@@ -11,6 +11,7 @@ interface Props {
   onDeleteQuestion: (id: string) => void;
   onUpdateQuestion: (id: string, data: Partial<Question>) => void;
   disabled?: boolean;
+  children?: React.ReactNode; // ✅ pour inclure des enfants directement si nécessaire
 }
 
 const SectionBlock: React.FC<Props> = ({
@@ -19,6 +20,7 @@ const SectionBlock: React.FC<Props> = ({
   onDeleteQuestion,
   onUpdateQuestion,
   disabled,
+  children,
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({
@@ -32,9 +34,13 @@ const SectionBlock: React.FC<Props> = ({
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="mb-4 border rounded">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="mb-4 border rounded shadow-sm"
+    >
       <div className="d-flex align-items-center justify-content-between mb-2 p-2 bg-light">
-        {section && (
+        {/* {section && (
           <span
             {...attributes}
             {...listeners}
@@ -43,9 +49,12 @@ const SectionBlock: React.FC<Props> = ({
           >
             ⠿
           </span>
-        )}
+        )} */}
         <h5 className="mb-0">
-          {section ? `📂 ${section.title}` : `🗂️ Questions sans section`}
+          {section
+            ? // ? `📂 ${section.title ?? section.name}`
+              `📂 ${section.title}`
+            : `🗂️ Questions sans section`}
           <span
             className={`badge ms-2 ${
               section ? "bg-secondary" : "bg-warning text-dark"
@@ -57,7 +66,9 @@ const SectionBlock: React.FC<Props> = ({
       </div>
 
       <div className="p-2">
-        {questions.length === 0 ? (
+        {children ? (
+          children
+        ) : questions.length === 0 ? (
           <div className="text-muted fst-italic">
             Aucune question dans cette section
           </div>

@@ -101,6 +101,24 @@ const questionService = {
       }
     );
   },
+  // ============================
+  // reorder: async (
+  //   tenantSlug: string,
+  //   surveyId: string,
+  //   questionId: string,
+  //   sourceSectionId: string | null,
+  //   targetSectionId: string | null,
+  //   targetPosition: number
+  // ) => {
+  //   await api.post(
+  //     `/tenants/${tenantSlug}/surveys/${surveyId}/questions/${questionId}/reorder`,
+  //     {
+  //       sourceSectionId,
+  //       targetSectionId,
+  //       targetPosition,
+  //     }
+  //   );
+  // },
 };
 
 export default questionService;
