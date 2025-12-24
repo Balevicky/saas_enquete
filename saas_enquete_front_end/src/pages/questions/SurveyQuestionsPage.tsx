@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useReducer, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
 import {
@@ -7,8 +7,8 @@ import {
 } from "@dnd-kit/sortable";
 
 import questionService, { Question } from "../../services/questionService";
-import surveyService, { Survey } from "../../services/surveyService";
-import sectionService, { Section } from "../../services/sectionService";
+import surveyService from "../../services/surveyService";
+import sectionService from "../../services/sectionService";
 
 import QuestionForm from "../../components/questions/QuestionForm";
 import SectionBlock from "../../components/sections/SectionBlock";
@@ -18,7 +18,23 @@ import QuestionDependencyGraph from "../../components/questions/QuestionDependen
 import { QuestionType } from "../../types/question";
 import { useConfirm } from "../../components/ConfirmProvider";
 
+/* ✅ REDUCER */
+import {
+  surveyQuestionsReducer,
+  SurveyQuestionsState,
+} from "../../reducers/surveyQuestions.reducer";
+
 const UNASSIGNED = "__unassigned__";
+
+/* ======================
+   INITIAL STATE
+====================== */
+const initialState: SurveyQuestionsState = {
+  survey: null,
+  sections: [],
+  questions: [],
+  loading: true,
+};
 
 const SurveyQuestionsPage = () => {
   const navigate = useNavigate();
@@ -29,22 +45,25 @@ const SurveyQuestionsPage = () => {
 
   const confirm = useConfirm();
 
-  const [survey, setSurvey] = useState<Survey | null>(null);
-  const [sections, setSections] = useState<Section[]>([]);
-  const [questions, setQuestions] = useState<Question[]>([]);
+  /* ======================
+     REDUCER STATE
+  ====================== */
+  const [state, dispatch] = useReducer(surveyQuestionsReducer, initialState);
+
+  const { survey, sections, questions, loading } = state;
+
+  /* UI-only state */
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(
     null
   );
-  const [loading, setLoading] = useState(true);
 
   const isAdvanced = survey?.mode === "ADVANCED";
 
-  // ======================
-  // INITIAL LOAD ONLY
-  // ======================
+  /* ======================
+     INITIAL LOAD (ONCE)
+  ====================== */
   const load = async () => {
     if (!tenantSlug || !surveyId) return;
-    setLoading(true);
 
     try {
       const [surveyRes, sectionsRes, questionsRes] = await Promise.all([
@@ -53,11 +72,16 @@ const SurveyQuestionsPage = () => {
         questionService.list(tenantSlug, surveyId),
       ]);
 
-      setSurvey(surveyRes);
-      setSections(sectionsRes.sort((a, b) => a.position - b.position));
-      setQuestions(questionsRes.data.sort((a, b) => a.position - b.position));
-    } finally {
-      setLoading(false);
+      dispatch({
+        type: "LOAD_SUCCESS",
+        payload: {
+          survey: surveyRes,
+          sections: sectionsRes.sort((a, b) => a.position - b.position),
+          questions: questionsRes.data.sort((a, b) => a.position - b.position),
+        },
+      });
+    } catch (e) {
+      console.error("Erreur de chargement", e);
     }
   };
 
@@ -65,9 +89,9 @@ const SurveyQuestionsPage = () => {
     load();
   }, [tenantSlug, surveyId]);
 
-  // ======================
-  // DERIVED DATA
-  // ======================
+  /* ======================
+     DERIVED DATA
+  ====================== */
   const questionsBySection = useMemo(() => {
     const map: Record<string, Question[]> = {};
     sections.forEach((s) => (map[s.id] = []));
@@ -85,9 +109,9 @@ const SurveyQuestionsPage = () => {
     return map;
   }, [questions, sections]);
 
-  // ======================
-  // CRUD QUESTIONS (NO RELOAD)
-  // ======================
+  /* ======================
+     CRUD — OPTIMISTIC
+  ====================== */
   const createQuestion = async (data: {
     label: string;
     type: QuestionType;
@@ -98,44 +122,39 @@ const SurveyQuestionsPage = () => {
     if (!tenantSlug || !surveyId || isAdvanced) return;
 
     const key = selectedSectionId ?? UNASSIGNED;
-    const sectionQuestions = questionsBySection[key] || [];
-    const newPosition = sectionQuestions.length + 1;
+    const position = (questionsBySection[key]?.length ?? 0) + 1;
 
     const created = await questionService.create(tenantSlug, surveyId, {
       ...data,
       sectionId: selectedSectionId,
-      position: newPosition,
+      position,
     });
 
-    setQuestions((prev) => [...prev, created]);
+    dispatch({ type: "ADD_QUESTION", payload: created });
     setSelectedSectionId(null);
   };
 
   const updateQuestion = async (id: string, data: Partial<Question>) => {
     if (!tenantSlug || !surveyId || isAdvanced) return;
 
-    const updated = await questionService.update(
-      tenantSlug,
-      surveyId,
-      id,
-      data
-    );
+    await questionService.update(tenantSlug, surveyId, id, data);
 
-    setQuestions((prev) =>
-      prev.map((q) => (q.id === id ? { ...q, ...updated } : q))
-    );
+    dispatch({
+      type: "UPDATE_QUESTION",
+      payload: { id, data },
+    });
   };
 
   const deleteQuestion = async (id: string) => {
     if (!tenantSlug || !surveyId || isAdvanced) return;
 
-    const questionToDelete = questions.find((q) => q.id === id);
-    if (!questionToDelete) return;
+    const question = questions.find((q) => q.id === id);
+    if (!question) return;
 
     const confirmed = await confirm(
       <>
         <p>Es-tu sûr de vouloir supprimer la question :</p>
-        <strong>{questionToDelete.label}</strong>
+        <strong>{question.label}</strong>
         <p className="text-danger mt-2">Cette action est irréversible.</p>
       </>,
       {
@@ -148,12 +167,13 @@ const SurveyQuestionsPage = () => {
     if (!confirmed) return;
 
     await questionService.remove(tenantSlug, surveyId, id);
-    setQuestions((prev) => prev.filter((q) => q.id !== id));
+
+    dispatch({ type: "DELETE_QUESTION", payload: id });
   };
 
-  // ======================
-  // DND HELPERS
-  // ======================
+  /* ======================
+     DND HELPERS
+  ====================== */
   const findSectionIdByQuestionId = (questionId: string): string | null => {
     for (const [sectionId, list] of Object.entries(questionsBySection)) {
       if (list.some((q) => q.id === questionId)) {
@@ -188,8 +208,8 @@ const SurveyQuestionsPage = () => {
 
     if (sourceIndex === -1 || targetIndex === -1) return;
 
-    const movedQuestion = questions.find((q) => q.id === activeId);
-    if (!movedQuestion) return;
+    const moved = questions.find((q) => q.id === activeId);
+    if (!moved) return;
 
     const bySection: Record<string, Question[]> = {};
     Object.entries(questionsBySection).forEach(
@@ -201,7 +221,7 @@ const SurveyQuestionsPage = () => {
 
     bySection[sourceKey].splice(sourceIndex, 1);
     bySection[targetKey].splice(targetIndex, 0, {
-      ...movedQuestion,
+      ...moved,
       sectionId: targetSectionId,
     });
 
@@ -209,7 +229,9 @@ const SurveyQuestionsPage = () => {
       list.forEach((q, i) => (q.position = i + 1))
     );
 
-    setQuestions(Object.values(bySection).flat());
+    const reordered = Object.values(bySection).flat();
+
+    dispatch({ type: "REORDER_QUESTIONS", payload: reordered });
 
     try {
       await questionService.reorder(
@@ -228,6 +250,9 @@ const SurveyQuestionsPage = () => {
 
   if (loading) return <p className="p-3">Chargement…</p>;
 
+  /* ======================
+     RENDER
+  ====================== */
   return (
     <div className="p-3">
       <h2 className="mb-3">🧩 Questions du survey</h2>
@@ -327,6 +352,670 @@ const SurveyQuestionsPage = () => {
 };
 
 export default SurveyQuestionsPage;
+
+// ===============================================
+// // import { useEffect, useState, useMemo } from "react";
+// // import { useNavigate, useParams } from "react-router-dom";
+// import { useEffect, useState, useMemo } from "react";
+// import { useNavigate, useParams } from "react-router-dom";
+// import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
+// import {
+//   SortableContext,
+//   verticalListSortingStrategy,
+// } from "@dnd-kit/sortable";
+
+// import questionService, { Question } from "../../services/questionService";
+// import surveyService, { Survey } from "../../services/surveyService";
+// import sectionService, { Section } from "../../services/sectionService";
+
+// import QuestionForm from "../../components/questions/QuestionForm";
+// import SectionBlock from "../../components/sections/SectionBlock";
+// import SortableQuestionItem from "../../components/questions/SortableQuestionItem";
+// import QuestionDependencyGraph from "../../components/questions/QuestionDependencyGraph";
+
+// import { QuestionType } from "../../types/question";
+// import { useConfirm } from "../../components/ConfirmProvider";
+
+// const UNASSIGNED = "__unassigned__";
+
+// const SurveyQuestionsPage = () => {
+//   const navigate = useNavigate();
+//   const { tenantSlug, surveyId } = useParams<{
+//     tenantSlug: string;
+//     surveyId: string;
+//   }>();
+
+//   const confirm = useConfirm();
+
+//   const [survey, setSurvey] = useState<Survey | null>(null);
+//   const [sections, setSections] = useState<Section[]>([]);
+//   const [questions, setQuestions] = useState<Question[]>([]);
+//   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(
+//     null
+//   );
+//   const [loading, setLoading] = useState(true);
+
+//   const isAdvanced = survey?.mode === "ADVANCED";
+
+//   // ======================
+//   // INITIAL LOAD ONLY
+//   // ======================
+//   const load = async () => {
+//     if (!tenantSlug || !surveyId) return;
+//     setLoading(true);
+
+//     try {
+//       const [surveyRes, sectionsRes, questionsRes] = await Promise.all([
+//         surveyService.get(tenantSlug, surveyId),
+//         sectionService.list(tenantSlug, surveyId),
+//         questionService.list(tenantSlug, surveyId),
+//       ]);
+
+//       setSurvey(surveyRes);
+//       setSections(sectionsRes.sort((a, b) => a.position - b.position));
+//       setQuestions(questionsRes.data.sort((a, b) => a.position - b.position));
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   useEffect(() => {
+//     load();
+//   }, [tenantSlug, surveyId]);
+
+//   // ======================
+//   // DERIVED DATA
+//   // ======================
+//   const questionsBySection = useMemo(() => {
+//     const map: Record<string, Question[]> = {};
+//     sections.forEach((s) => (map[s.id] = []));
+//     map[UNASSIGNED] = [];
+
+//     questions.forEach((q) => {
+//       const key = q.sectionId ?? UNASSIGNED;
+//       map[key]?.push(q);
+//     });
+
+//     Object.values(map).forEach((list) =>
+//       list.sort((a, b) => a.position - b.position)
+//     );
+
+//     return map;
+//   }, [questions, sections]);
+
+//   // ======================
+//   // CRUD QUESTIONS (NO RELOAD)
+//   // ======================
+//   const createQuestion = async (data: {
+//     label: string;
+//     type: QuestionType;
+//     options?: string[];
+//     config?: { min: number; max: number };
+//     nextMap?: Record<string, string>;
+//   }) => {
+//     if (!tenantSlug || !surveyId || isAdvanced) return;
+
+//     const key = selectedSectionId ?? UNASSIGNED;
+//     const sectionQuestions = questionsBySection[key] || [];
+//     const newPosition = sectionQuestions.length + 1;
+
+//     const created = await questionService.create(tenantSlug, surveyId, {
+//       ...data,
+//       sectionId: selectedSectionId,
+//       position: newPosition,
+//     });
+
+//     setQuestions((prev) => [...prev, created]);
+//     setSelectedSectionId(null);
+//   };
+
+//   const updateQuestion = async (id: string, data: Partial<Question>) => {
+//     if (!tenantSlug || !surveyId || isAdvanced) return;
+
+//     const updated = await questionService.update(
+//       tenantSlug,
+//       surveyId,
+//       id,
+//       data
+//     );
+
+//     setQuestions((prev) =>
+//       prev.map((q) => (q.id === id ? { ...q, ...updated } : q))
+//     );
+//   };
+
+//   const deleteQuestion = async (id: string) => {
+//     if (!tenantSlug || !surveyId || isAdvanced) return;
+
+//     const questionToDelete = questions.find((q) => q.id === id);
+//     if (!questionToDelete) return;
+
+//     const confirmed = await confirm(
+//       <>
+//         <p>Es-tu sûr de vouloir supprimer la question :</p>
+//         <strong>{questionToDelete.label}</strong>
+//         <p className="text-danger mt-2">Cette action est irréversible.</p>
+//       </>,
+//       {
+//         title: "Confirmer la suppression",
+//         confirmText: "Supprimer",
+//         cancelText: "Annuler",
+//       }
+//     );
+
+//     if (!confirmed) return;
+
+//     await questionService.remove(tenantSlug, surveyId, id);
+//     setQuestions((prev) => prev.filter((q) => q.id !== id));
+//   };
+
+//   // ======================
+//   // DND HELPERS
+//   // ======================
+//   const findSectionIdByQuestionId = (questionId: string): string | null => {
+//     for (const [sectionId, list] of Object.entries(questionsBySection)) {
+//       if (list.some((q) => q.id === questionId)) {
+//         return sectionId === UNASSIGNED ? null : sectionId;
+//       }
+//     }
+//     return null;
+//   };
+
+//   const findIndexInSection = (
+//     sectionId: string | null,
+//     questionId: string
+//   ): number => {
+//     const key = sectionId ?? UNASSIGNED;
+//     return questionsBySection[key]?.findIndex((q) => q.id === questionId) ?? -1;
+//   };
+
+//   const handleDragEnd = async (event: DragEndEvent) => {
+//     if (isAdvanced) return;
+
+//     const { active, over } = event;
+//     if (!over || active.id === over.id) return;
+
+//     const activeId = active.id as string;
+//     const overId = over.id as string;
+
+//     const sourceSectionId = findSectionIdByQuestionId(activeId);
+//     const targetSectionId = findSectionIdByQuestionId(overId);
+
+//     const sourceIndex = findIndexInSection(sourceSectionId, activeId);
+//     const targetIndex = findIndexInSection(targetSectionId, overId);
+
+//     if (sourceIndex === -1 || targetIndex === -1) return;
+
+//     const movedQuestion = questions.find((q) => q.id === activeId);
+//     if (!movedQuestion) return;
+
+//     const bySection: Record<string, Question[]> = {};
+//     Object.entries(questionsBySection).forEach(
+//       ([k, v]) => (bySection[k] = [...v])
+//     );
+
+//     const sourceKey = sourceSectionId ?? UNASSIGNED;
+//     const targetKey = targetSectionId ?? UNASSIGNED;
+
+//     bySection[sourceKey].splice(sourceIndex, 1);
+//     bySection[targetKey].splice(targetIndex, 0, {
+//       ...movedQuestion,
+//       sectionId: targetSectionId,
+//     });
+
+//     Object.values(bySection).forEach((list) =>
+//       list.forEach((q, i) => (q.position = i + 1))
+//     );
+
+//     setQuestions(Object.values(bySection).flat());
+
+//     try {
+//       await questionService.reorder(
+//         tenantSlug!,
+//         surveyId!,
+//         activeId,
+//         sourceSectionId,
+//         targetSectionId,
+//         targetIndex + 1
+//       );
+//     } catch (e) {
+//       console.error("Reorder échoué → rollback", e);
+//       load();
+//     }
+//   };
+
+//   if (loading) return <p className="p-3">Chargement…</p>;
+
+//   return (
+//     <div className="p-3">
+//       <h2 className="mb-3">🧩 Questions du survey</h2>
+
+//       {isAdvanced && (
+//         <div className="alert alert-danger">
+//           <strong>🚫 Mode avancé</strong>
+//           <button
+//             className="btn btn-light mt-2"
+//             onClick={() =>
+//               navigate(`/t/${tenantSlug}/surveys/${surveyId}/builder`)
+//             }
+//           >
+//             Ouvrir le Builder
+//           </button>
+//         </div>
+//       )}
+
+//       {!isAdvanced && (
+//         <>
+//           <select
+//             className="form-select mb-3"
+//             value={selectedSectionId ?? ""}
+//             onChange={(e) => setSelectedSectionId(e.target.value || null)}
+//           >
+//             <option value="">🗂️ Aucune section</option>
+//             {sections.map((s) => (
+//               <option key={s.id} value={s.id}>
+//                 {s.title}
+//               </option>
+//             ))}
+//           </select>
+
+//           <QuestionForm onSubmit={createQuestion} allQuestions={questions} />
+//         </>
+//       )}
+
+//       <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+//         {sections.map((section) => (
+//           <SortableContext
+//             key={section.id}
+//             items={questionsBySection[section.id].map((q) => q.id)}
+//             strategy={verticalListSortingStrategy}
+//           >
+//             <SectionBlock
+//               section={section}
+//               questions={questionsBySection[section.id]}
+//               onDeleteQuestion={deleteQuestion}
+//               onUpdateQuestion={updateQuestion}
+//               disabled={isAdvanced}
+//             >
+//               {questionsBySection[section.id].map((q) => (
+//                 <SortableQuestionItem
+//                   key={q.id}
+//                   question={q}
+//                   allQuestions={questions}
+//                   onDelete={deleteQuestion}
+//                   onUpdate={updateQuestion}
+//                   disabled={isAdvanced}
+//                 />
+//               ))}
+//             </SectionBlock>
+//           </SortableContext>
+//         ))}
+
+//         <SortableContext
+//           items={questionsBySection[UNASSIGNED].map((q) => q.id)}
+//           strategy={verticalListSortingStrategy}
+//         >
+//           <SectionBlock
+//             section={null}
+//             questions={questionsBySection[UNASSIGNED]}
+//             onDeleteQuestion={deleteQuestion}
+//             onUpdateQuestion={updateQuestion}
+//             disabled={isAdvanced}
+//           >
+//             {questionsBySection[UNASSIGNED].map((q) => (
+//               <SortableQuestionItem
+//                 key={q.id}
+//                 question={q}
+//                 allQuestions={questions}
+//                 onDelete={deleteQuestion}
+//                 onUpdate={updateQuestion}
+//                 disabled={isAdvanced}
+//               />
+//             ))}
+//           </SectionBlock>
+//         </SortableContext>
+//       </DndContext>
+
+//       <h4 className="mt-4">🔗 Dépendances</h4>
+//       <div className="border rounded p-2" style={{ height: 500 }}>
+//         <QuestionDependencyGraph questions={questions} />
+//       </div>
+//     </div>
+//   );
+// };
+
+// export default SurveyQuestionsPage;
+
+// // ===================================== bon meme à l'ajout d'une nouvelle question, les position  sont reordonner par section et pas rechargement de la page
+// import { useEffect, useState, useMemo } from "react";
+// import { useNavigate, useParams } from "react-router-dom";
+// import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
+// import {
+//   SortableContext,
+//   verticalListSortingStrategy,
+// } from "@dnd-kit/sortable";
+
+// import questionService, { Question } from "../../services/questionService";
+// import surveyService, { Survey } from "../../services/surveyService";
+// import sectionService, { Section } from "../../services/sectionService";
+
+// import QuestionForm from "../../components/questions/QuestionForm";
+// import SectionBlock from "../../components/sections/SectionBlock";
+// import SortableQuestionItem from "../../components/questions/SortableQuestionItem";
+// import QuestionDependencyGraph from "../../components/questions/QuestionDependencyGraph";
+
+// import { QuestionType } from "../../types/question";
+// import { useConfirm } from "../../components/ConfirmProvider";
+
+// const UNASSIGNED = "__unassigned__";
+
+// const SurveyQuestionsPage = () => {
+//   const navigate = useNavigate();
+//   const { tenantSlug, surveyId } = useParams<{
+//     tenantSlug: string;
+//     surveyId: string;
+//   }>();
+
+//   const confirm = useConfirm();
+
+//   const [survey, setSurvey] = useState<Survey | null>(null);
+//   const [sections, setSections] = useState<Section[]>([]);
+//   const [questions, setQuestions] = useState<Question[]>([]);
+//   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(
+//     null
+//   );
+//   const [loading, setLoading] = useState(true);
+
+//   const isAdvanced = survey?.mode === "ADVANCED";
+
+//   // ======================
+//   // INITIAL LOAD ONLY
+//   // ======================
+//   const load = async () => {
+//     if (!tenantSlug || !surveyId) return;
+//     setLoading(true);
+
+//     try {
+//       const [surveyRes, sectionsRes, questionsRes] = await Promise.all([
+//         surveyService.get(tenantSlug, surveyId),
+//         sectionService.list(tenantSlug, surveyId),
+//         questionService.list(tenantSlug, surveyId),
+//       ]);
+
+//       setSurvey(surveyRes);
+//       setSections(sectionsRes.sort((a, b) => a.position - b.position));
+//       setQuestions(questionsRes.data.sort((a, b) => a.position - b.position));
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   useEffect(() => {
+//     load();
+//   }, [tenantSlug, surveyId]);
+
+//   // ======================
+//   // DERIVED DATA
+//   // ======================
+//   const questionsBySection = useMemo(() => {
+//     const map: Record<string, Question[]> = {};
+//     sections.forEach((s) => (map[s.id] = []));
+//     map[UNASSIGNED] = [];
+
+//     questions.forEach((q) => {
+//       const key = q.sectionId ?? UNASSIGNED;
+//       map[key]?.push(q);
+//     });
+
+//     Object.values(map).forEach((list) =>
+//       list.sort((a, b) => a.position - b.position)
+//     );
+
+//     return map;
+//   }, [questions, sections]);
+
+//   // ======================
+//   // CRUD QUESTIONS (NO RELOAD)
+//   // ======================
+//   const createQuestion = async (data: {
+//     label: string;
+//     type: QuestionType;
+//     options?: string[];
+//     config?: { min: number; max: number };
+//     nextMap?: Record<string, string>;
+//   }) => {
+//     if (!tenantSlug || !surveyId || isAdvanced) return;
+
+//     const key = selectedSectionId ?? UNASSIGNED;
+//     const sectionQuestions = questionsBySection[key] || [];
+//     const newPosition = sectionQuestions.length + 1;
+
+//     const created = await questionService.create(tenantSlug, surveyId, {
+//       ...data,
+//       sectionId: selectedSectionId,
+//       position: newPosition,
+//     });
+
+//     setQuestions((prev) => [...prev, created]);
+//     setSelectedSectionId(null);
+//   };
+
+//   const updateQuestion = async (id: string, data: Partial<Question>) => {
+//     if (!tenantSlug || !surveyId || isAdvanced) return;
+
+//     const updated = await questionService.update(
+//       tenantSlug,
+//       surveyId,
+//       id,
+//       data
+//     );
+
+//     setQuestions((prev) =>
+//       prev.map((q) => (q.id === id ? { ...q, ...updated } : q))
+//     );
+//   };
+
+//   const deleteQuestion = async (id: string) => {
+//     if (!tenantSlug || !surveyId || isAdvanced) return;
+
+//     const questionToDelete = questions.find((q) => q.id === id);
+//     if (!questionToDelete) return;
+
+//     const confirmed = await confirm(
+//       <>
+//         <p>Es-tu sûr de vouloir supprimer la question :</p>
+//         <strong>{questionToDelete.label}</strong>
+//         <p className="text-danger mt-2">Cette action est irréversible.</p>
+//       </>,
+//       {
+//         title: "Confirmer la suppression",
+//         confirmText: "Supprimer",
+//         cancelText: "Annuler",
+//       }
+//     );
+
+//     if (!confirmed) return;
+
+//     await questionService.remove(tenantSlug, surveyId, id);
+//     setQuestions((prev) => prev.filter((q) => q.id !== id));
+//   };
+
+//   // ======================
+//   // DND HELPERS
+//   // ======================
+//   const findSectionIdByQuestionId = (questionId: string): string | null => {
+//     for (const [sectionId, list] of Object.entries(questionsBySection)) {
+//       if (list.some((q) => q.id === questionId)) {
+//         return sectionId === UNASSIGNED ? null : sectionId;
+//       }
+//     }
+//     return null;
+//   };
+
+//   const findIndexInSection = (
+//     sectionId: string | null,
+//     questionId: string
+//   ): number => {
+//     const key = sectionId ?? UNASSIGNED;
+//     return questionsBySection[key]?.findIndex((q) => q.id === questionId) ?? -1;
+//   };
+
+//   const handleDragEnd = async (event: DragEndEvent) => {
+//     if (isAdvanced) return;
+
+//     const { active, over } = event;
+//     if (!over || active.id === over.id) return;
+
+//     const activeId = active.id as string;
+//     const overId = over.id as string;
+
+//     const sourceSectionId = findSectionIdByQuestionId(activeId);
+//     const targetSectionId = findSectionIdByQuestionId(overId);
+
+//     const sourceIndex = findIndexInSection(sourceSectionId, activeId);
+//     const targetIndex = findIndexInSection(targetSectionId, overId);
+
+//     if (sourceIndex === -1 || targetIndex === -1) return;
+
+//     const movedQuestion = questions.find((q) => q.id === activeId);
+//     if (!movedQuestion) return;
+
+//     const bySection: Record<string, Question[]> = {};
+//     Object.entries(questionsBySection).forEach(
+//       ([k, v]) => (bySection[k] = [...v])
+//     );
+
+//     const sourceKey = sourceSectionId ?? UNASSIGNED;
+//     const targetKey = targetSectionId ?? UNASSIGNED;
+
+//     bySection[sourceKey].splice(sourceIndex, 1);
+//     bySection[targetKey].splice(targetIndex, 0, {
+//       ...movedQuestion,
+//       sectionId: targetSectionId,
+//     });
+
+//     Object.values(bySection).forEach((list) =>
+//       list.forEach((q, i) => (q.position = i + 1))
+//     );
+
+//     setQuestions(Object.values(bySection).flat());
+
+//     try {
+//       await questionService.reorder(
+//         tenantSlug!,
+//         surveyId!,
+//         activeId,
+//         sourceSectionId,
+//         targetSectionId,
+//         targetIndex + 1
+//       );
+//     } catch (e) {
+//       console.error("Reorder échoué → rollback", e);
+//       load();
+//     }
+//   };
+
+//   if (loading) return <p className="p-3">Chargement…</p>;
+
+//   return (
+//     <div className="p-3">
+//       <h2 className="mb-3">🧩 Questions du survey</h2>
+
+//       {isAdvanced && (
+//         <div className="alert alert-danger">
+//           <strong>🚫 Mode avancé</strong>
+//           <button
+//             className="btn btn-light mt-2"
+//             onClick={() =>
+//               navigate(`/t/${tenantSlug}/surveys/${surveyId}/builder`)
+//             }
+//           >
+//             Ouvrir le Builder
+//           </button>
+//         </div>
+//       )}
+
+//       {!isAdvanced && (
+//         <>
+//           <select
+//             className="form-select mb-3"
+//             value={selectedSectionId ?? ""}
+//             onChange={(e) => setSelectedSectionId(e.target.value || null)}
+//           >
+//             <option value="">🗂️ Aucune section</option>
+//             {sections.map((s) => (
+//               <option key={s.id} value={s.id}>
+//                 {s.title}
+//               </option>
+//             ))}
+//           </select>
+
+//           <QuestionForm onSubmit={createQuestion} allQuestions={questions} />
+//         </>
+//       )}
+
+//       <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+//         {sections.map((section) => (
+//           <SortableContext
+//             key={section.id}
+//             items={questionsBySection[section.id].map((q) => q.id)}
+//             strategy={verticalListSortingStrategy}
+//           >
+//             <SectionBlock
+//               section={section}
+//               questions={questionsBySection[section.id]}
+//               onDeleteQuestion={deleteQuestion}
+//               onUpdateQuestion={updateQuestion}
+//               disabled={isAdvanced}
+//             >
+//               {questionsBySection[section.id].map((q) => (
+//                 <SortableQuestionItem
+//                   key={q.id}
+//                   question={q}
+//                   allQuestions={questions}
+//                   onDelete={deleteQuestion}
+//                   onUpdate={updateQuestion}
+//                   disabled={isAdvanced}
+//                 />
+//               ))}
+//             </SectionBlock>
+//           </SortableContext>
+//         ))}
+
+//         <SortableContext
+//           items={questionsBySection[UNASSIGNED].map((q) => q.id)}
+//           strategy={verticalListSortingStrategy}
+//         >
+//           <SectionBlock
+//             section={null}
+//             questions={questionsBySection[UNASSIGNED]}
+//             onDeleteQuestion={deleteQuestion}
+//             onUpdateQuestion={updateQuestion}
+//             disabled={isAdvanced}
+//           >
+//             {questionsBySection[UNASSIGNED].map((q) => (
+//               <SortableQuestionItem
+//                 key={q.id}
+//                 question={q}
+//                 allQuestions={questions}
+//                 onDelete={deleteQuestion}
+//                 onUpdate={updateQuestion}
+//                 disabled={isAdvanced}
+//               />
+//             ))}
+//           </SectionBlock>
+//         </SortableContext>
+//       </DndContext>
+
+//       <h4 className="mt-4">🔗 Dépendances</h4>
+//       <div className="border rounded p-2" style={{ height: 500 }}>
+//         <QuestionDependencyGraph questions={questions} />
+//       </div>
+//     </div>
+//   );
+// };
+
+// export default SurveyQuestionsPage;
 
 // // ===================================== bon mais à l'ajout d'une nouvelle question, les position  sont reordonner par section avec rechargement de la page
 // import { useEffect, useState, useMemo } from "react";
