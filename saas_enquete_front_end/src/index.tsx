@@ -11,7 +11,7 @@ import { store } from "./store";
 const root = ReactDOM.createRoot(
   document.getElementById("root") as HTMLElement
 );
-
+console.log("STORE INDEX", store);
 root.render(
   <Provider store={store}>
     <App />

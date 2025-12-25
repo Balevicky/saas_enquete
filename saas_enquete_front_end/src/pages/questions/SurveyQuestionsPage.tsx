@@ -1,5 +1,11 @@
-import { useEffect, useMemo, useReducer, useState } from "react";
+// import { useEffect, useMemo, useReducer, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+// ==================== nouveau
+import { useDispatch, useSelector } from "react-redux";
+import { RootState } from "../../store";
+// ==================== nouveau
+
 import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -19,8 +25,8 @@ import { QuestionType } from "../../types/question";
 import { useConfirm } from "../../components/ConfirmProvider";
 
 /* ✅ REDUCER */
-import {
-  surveyQuestionsReducer,
+import surveyQuestionsReducer, {
+  // surveyQuestionsReducer,
   SurveyQuestionsState,
 } from "../../reducers/surveyQuestions.reducer";
 
@@ -42,15 +48,21 @@ const SurveyQuestionsPage = () => {
     tenantSlug: string;
     surveyId: string;
   }>();
-
+  const dispatch = useDispatch();
   const confirm = useConfirm();
 
   /* ======================
      REDUCER STATE
   ====================== */
-  const [state, dispatch] = useReducer(surveyQuestionsReducer, initialState);
+  // ================nouvau
 
-  const { survey, sections, questions, loading } = state;
+  const { survey, sections, questions, loading } = useSelector(
+    (state: RootState) => state.surveyQuestions
+  );
+  // const [state, dispatch] = useReducer(surveyQuestionsReducer, initialState);
+  // const [state] = useReducer(surveyQuestionsReducer, initialState);
+
+  // const { survey, sections, questions, loading } = state;
 
   /* UI-only state */
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(
@@ -84,6 +96,14 @@ const SurveyQuestionsPage = () => {
       console.error("Erreur de chargement", e);
     }
   };
+  // ================== TEST
+  useEffect(() => {
+    dispatch({
+      type: "TEST_ACTION",
+      payload: "hello redux",
+    });
+  }, [dispatch]);
+  // ================== TEST
 
   useEffect(() => {
     load();
@@ -224,14 +244,32 @@ const SurveyQuestionsPage = () => {
       ...moved,
       sectionId: targetSectionId,
     });
+    // ============================== Nouveau
+    const reordered: Question[] = [];
 
-    Object.values(bySection).forEach((list) =>
-      list.forEach((q, i) => (q.position = i + 1))
-    );
+    Object.entries(bySection).forEach(([sectionKey, list]) => {
+      list.forEach((q, index) => {
+        reordered.push({
+          ...q,
+          sectionId: sectionKey === UNASSIGNED ? null : sectionKey,
+          position: index + 1,
+        });
+      });
+    });
 
-    const reordered = Object.values(bySection).flat();
+    dispatch({
+      type: "REORDER_QUESTIONS",
+      payload: reordered,
+    });
 
-    dispatch({ type: "REORDER_QUESTIONS", payload: reordered });
+    // ============================== Nouveau
+    // Object.values(bySection).forEach((list) =>
+    //   list.forEach((q, i) => (q.position = i + 1))
+    // );
+
+    // const reordered = Object.values(bySection).flat();
+
+    // dispatch({ type: "REORDER_QUESTIONS", payload: reordered });
 
     try {
       await questionService.reorder(
@@ -352,6 +390,373 @@ const SurveyQuestionsPage = () => {
 };
 
 export default SurveyQuestionsPage;
+
+// ===============================================BON MAIS PAS VISIBLE DANS REDUX du navigateur
+
+// import { useEffect, useMemo, useReducer, useState } from "react";
+// import { useNavigate, useParams } from "react-router-dom";
+
+// import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
+// import {
+//   SortableContext,
+//   verticalListSortingStrategy,
+// } from "@dnd-kit/sortable";
+
+// import questionService, { Question } from "../../services/questionService";
+// import surveyService from "../../services/surveyService";
+// import sectionService from "../../services/sectionService";
+
+// import QuestionForm from "../../components/questions/QuestionForm";
+// import SectionBlock from "../../components/sections/SectionBlock";
+// import SortableQuestionItem from "../../components/questions/SortableQuestionItem";
+// import QuestionDependencyGraph from "../../components/questions/QuestionDependencyGraph";
+
+// import { QuestionType } from "../../types/question";
+// import { useConfirm } from "../../components/ConfirmProvider";
+
+// /* ✅ REDUCER */
+// import surveyQuestionsReducer, {
+//   // surveyQuestionsReducer,
+//   SurveyQuestionsState,
+// } from "../../reducers/surveyQuestions.reducer";
+
+// const UNASSIGNED = "__unassigned__";
+
+// /* ======================
+//    INITIAL STATE
+// ====================== */
+// const initialState: SurveyQuestionsState = {
+//   survey: null,
+//   sections: [],
+//   questions: [],
+//   loading: true,
+// };
+
+// const SurveyQuestionsPage = () => {
+//   const navigate = useNavigate();
+//   const { tenantSlug, surveyId } = useParams<{
+//     tenantSlug: string;
+//     surveyId: string;
+//   }>();
+
+//   const confirm = useConfirm();
+
+//   /* ======================
+//      REDUCER STATE
+//   ====================== */
+
+//   const [state, dispatch] = useReducer(surveyQuestionsReducer, initialState);
+
+//   const { survey, sections, questions, loading } = state;
+
+//   /* UI-only state */
+//   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(
+//     null
+//   );
+
+//   const isAdvanced = survey?.mode === "ADVANCED";
+
+//   /* ======================
+//      INITIAL LOAD (ONCE)
+//   ====================== */
+//   const load = async () => {
+//     if (!tenantSlug || !surveyId) return;
+
+//     try {
+//       const [surveyRes, sectionsRes, questionsRes] = await Promise.all([
+//         surveyService.get(tenantSlug, surveyId),
+//         sectionService.list(tenantSlug, surveyId),
+//         questionService.list(tenantSlug, surveyId),
+//       ]);
+
+//       dispatch({
+//         type: "LOAD_SUCCESS",
+//         payload: {
+//           survey: surveyRes,
+//           sections: sectionsRes.sort((a, b) => a.position - b.position),
+//           questions: questionsRes.data.sort((a, b) => a.position - b.position),
+//         },
+//       });
+//     } catch (e) {
+//       console.error("Erreur de chargement", e);
+//     }
+//   };
+//   // ================== TEST
+//   useEffect(() => {
+//     dispatch({
+//       type: "TEST_ACTION",
+//       payload: "hello redux",
+//     });
+//   }, [dispatch]);
+//   // ================== TEST
+
+//   useEffect(() => {
+//     load();
+//   }, [tenantSlug, surveyId]);
+
+//   /* ======================
+//      DERIVED DATA
+//   ====================== */
+//   const questionsBySection = useMemo(() => {
+//     const map: Record<string, Question[]> = {};
+//     sections.forEach((s) => (map[s.id] = []));
+//     map[UNASSIGNED] = [];
+
+//     questions.forEach((q) => {
+//       const key = q.sectionId ?? UNASSIGNED;
+//       map[key]?.push(q);
+//     });
+
+//     Object.values(map).forEach((list) =>
+//       list.sort((a, b) => a.position - b.position)
+//     );
+
+//     return map;
+//   }, [questions, sections]);
+
+//   /* ======================
+//      CRUD — OPTIMISTIC
+//   ====================== */
+//   const createQuestion = async (data: {
+//     label: string;
+//     type: QuestionType;
+//     options?: string[];
+//     config?: { min: number; max: number };
+//     nextMap?: Record<string, string>;
+//   }) => {
+//     if (!tenantSlug || !surveyId || isAdvanced) return;
+
+//     const key = selectedSectionId ?? UNASSIGNED;
+//     const position = (questionsBySection[key]?.length ?? 0) + 1;
+
+//     const created = await questionService.create(tenantSlug, surveyId, {
+//       ...data,
+//       sectionId: selectedSectionId,
+//       position,
+//     });
+
+//     dispatch({ type: "ADD_QUESTION", payload: created });
+//     setSelectedSectionId(null);
+//   };
+
+//   const updateQuestion = async (id: string, data: Partial<Question>) => {
+//     if (!tenantSlug || !surveyId || isAdvanced) return;
+
+//     await questionService.update(tenantSlug, surveyId, id, data);
+
+//     dispatch({
+//       type: "UPDATE_QUESTION",
+//       payload: { id, data },
+//     });
+//   };
+
+//   const deleteQuestion = async (id: string) => {
+//     if (!tenantSlug || !surveyId || isAdvanced) return;
+
+//     const question = questions.find((q) => q.id === id);
+//     if (!question) return;
+
+//     const confirmed = await confirm(
+//       <>
+//         <p>Es-tu sûr de vouloir supprimer la question :</p>
+//         <strong>{question.label}</strong>
+//         <p className="text-danger mt-2">Cette action est irréversible.</p>
+//       </>,
+//       {
+//         title: "Confirmer la suppression",
+//         confirmText: "Supprimer",
+//         cancelText: "Annuler",
+//       }
+//     );
+
+//     if (!confirmed) return;
+
+//     await questionService.remove(tenantSlug, surveyId, id);
+
+//     dispatch({ type: "DELETE_QUESTION", payload: id });
+//   };
+
+//   /* ======================
+//      DND HELPERS
+//   ====================== */
+//   const findSectionIdByQuestionId = (questionId: string): string | null => {
+//     for (const [sectionId, list] of Object.entries(questionsBySection)) {
+//       if (list.some((q) => q.id === questionId)) {
+//         return sectionId === UNASSIGNED ? null : sectionId;
+//       }
+//     }
+//     return null;
+//   };
+
+//   const findIndexInSection = (
+//     sectionId: string | null,
+//     questionId: string
+//   ): number => {
+//     const key = sectionId ?? UNASSIGNED;
+//     return questionsBySection[key]?.findIndex((q) => q.id === questionId) ?? -1;
+//   };
+
+//   const handleDragEnd = async (event: DragEndEvent) => {
+//     if (isAdvanced) return;
+
+//     const { active, over } = event;
+//     if (!over || active.id === over.id) return;
+
+//     const activeId = active.id as string;
+//     const overId = over.id as string;
+
+//     const sourceSectionId = findSectionIdByQuestionId(activeId);
+//     const targetSectionId = findSectionIdByQuestionId(overId);
+
+//     const sourceIndex = findIndexInSection(sourceSectionId, activeId);
+//     const targetIndex = findIndexInSection(targetSectionId, overId);
+
+//     if (sourceIndex === -1 || targetIndex === -1) return;
+
+//     const moved = questions.find((q) => q.id === activeId);
+//     if (!moved) return;
+
+//     const bySection: Record<string, Question[]> = {};
+//     Object.entries(questionsBySection).forEach(
+//       ([k, v]) => (bySection[k] = [...v])
+//     );
+
+//     const sourceKey = sourceSectionId ?? UNASSIGNED;
+//     const targetKey = targetSectionId ?? UNASSIGNED;
+
+//     bySection[sourceKey].splice(sourceIndex, 1);
+//     bySection[targetKey].splice(targetIndex, 0, {
+//       ...moved,
+//       sectionId: targetSectionId,
+//     });
+
+//     Object.values(bySection).forEach((list) =>
+//       list.forEach((q, i) => (q.position = i + 1))
+//     );
+
+//     const reordered = Object.values(bySection).flat();
+
+//     dispatch({ type: "REORDER_QUESTIONS", payload: reordered });
+
+//     try {
+//       await questionService.reorder(
+//         tenantSlug!,
+//         surveyId!,
+//         activeId,
+//         sourceSectionId,
+//         targetSectionId,
+//         targetIndex + 1
+//       );
+//     } catch (e) {
+//       console.error("Reorder échoué → rollback", e);
+//       load();
+//     }
+//   };
+
+//   if (loading) return <p className="p-3">Chargement…</p>;
+
+//   /* ======================
+//      RENDER
+//   ====================== */
+//   return (
+//     <div className="p-3">
+//       <h2 className="mb-3">🧩 Questions du survey</h2>
+
+//       {isAdvanced && (
+//         <div className="alert alert-danger">
+//           <strong>🚫 Mode avancé</strong>
+//           <button
+//             className="btn btn-light mt-2"
+//             onClick={() =>
+//               navigate(`/t/${tenantSlug}/surveys/${surveyId}/builder`)
+//             }
+//           >
+//             Ouvrir le Builder
+//           </button>
+//         </div>
+//       )}
+
+//       {!isAdvanced && (
+//         <>
+//           <select
+//             className="form-select mb-3"
+//             value={selectedSectionId ?? ""}
+//             onChange={(e) => setSelectedSectionId(e.target.value || null)}
+//           >
+//             <option value="">🗂️ Aucune section</option>
+//             {sections.map((s) => (
+//               <option key={s.id} value={s.id}>
+//                 {s.title}
+//               </option>
+//             ))}
+//           </select>
+
+//           <QuestionForm onSubmit={createQuestion} allQuestions={questions} />
+//         </>
+//       )}
+
+//       <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+//         {sections.map((section) => (
+//           <SortableContext
+//             key={section.id}
+//             items={questionsBySection[section.id].map((q) => q.id)}
+//             strategy={verticalListSortingStrategy}
+//           >
+//             <SectionBlock
+//               section={section}
+//               questions={questionsBySection[section.id]}
+//               onDeleteQuestion={deleteQuestion}
+//               onUpdateQuestion={updateQuestion}
+//               disabled={isAdvanced}
+//             >
+//               {questionsBySection[section.id].map((q) => (
+//                 <SortableQuestionItem
+//                   key={q.id}
+//                   question={q}
+//                   allQuestions={questions}
+//                   onDelete={deleteQuestion}
+//                   onUpdate={updateQuestion}
+//                   disabled={isAdvanced}
+//                 />
+//               ))}
+//             </SectionBlock>
+//           </SortableContext>
+//         ))}
+
+//         <SortableContext
+//           items={questionsBySection[UNASSIGNED].map((q) => q.id)}
+//           strategy={verticalListSortingStrategy}
+//         >
+//           <SectionBlock
+//             section={null}
+//             questions={questionsBySection[UNASSIGNED]}
+//             onDeleteQuestion={deleteQuestion}
+//             onUpdateQuestion={updateQuestion}
+//             disabled={isAdvanced}
+//           >
+//             {questionsBySection[UNASSIGNED].map((q) => (
+//               <SortableQuestionItem
+//                 key={q.id}
+//                 question={q}
+//                 allQuestions={questions}
+//                 onDelete={deleteQuestion}
+//                 onUpdate={updateQuestion}
+//                 disabled={isAdvanced}
+//               />
+//             ))}
+//           </SectionBlock>
+//         </SortableContext>
+//       </DndContext>
+
+//       <h4 className="mt-4">🔗 Dépendances</h4>
+//       <div className="border rounded p-2" style={{ height: 500 }}>
+//         <QuestionDependencyGraph questions={questions} />
+//       </div>
+//     </div>
+//   );
+// };
+
+// export default SurveyQuestionsPage;
 
 // ===============================================
 // // import { useEffect, useState, useMemo } from "react";
