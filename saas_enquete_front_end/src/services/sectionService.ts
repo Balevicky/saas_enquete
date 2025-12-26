@@ -121,7 +121,7 @@ const sectionService = {
     targetPosition: number
   ): Promise<void> => {
     await api.post(
-      `/tenants/${tenantSlug}/surveys/${surveyId}/sections/${sectionId}/reorder`,
+      `/t/${tenantSlug}/surveys/${surveyId}/sections/${sectionId}/reorder`,
       { targetPosition }
     );
   },

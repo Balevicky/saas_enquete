@@ -134,4 +134,54 @@ export class SectionController {
       res.status(500).json({ message: "Erreur lors de la suppression" });
     }
   }
+  /**
+   * 🔹 Réordonner une section
+   * POST /t/:tenantSlug/surveys/:surveyId/sections/:sectionId/reorder
+   */
+  static async reorder(req: Request, res: Response) {
+    try {
+      const tenantId = (req as any).tenantId;
+      const { surveyId, sectionId } = req.params;
+      const { targetPosition } = req.body;
+
+      if (targetPosition === undefined || targetPosition < 0) {
+        return res.status(400).json({ message: "Position cible invalide" });
+      }
+
+      const section = await prisma.section.findFirst({
+        where: { id: sectionId, tenantId, surveyId },
+      });
+
+      if (!section) {
+        return res.status(404).json({ message: "Section introuvable" });
+      }
+
+      // 🔹 Récupérer toutes les sections du survey
+      const sections = await prisma.section.findMany({
+        where: { surveyId, tenantId },
+        orderBy: { position: "asc" },
+      });
+
+      // 🔹 Supprimer la section déplacée de la liste
+      const filtered = sections.filter((s) => s.id !== sectionId);
+
+      // 🔹 Insérer à la nouvelle position
+      filtered.splice(targetPosition, 0, section);
+
+      // 🔹 Mettre à jour toutes les positions
+      const updatePromises = filtered.map((s, index) =>
+        prisma.section.update({
+          where: { id: s.id },
+          data: { position: index },
+        })
+      );
+
+      await Promise.all(updatePromises);
+
+      res.status(200).json({ message: "Section réordonnée avec succès" });
+    } catch (error) {
+      console.error("Section.reorder error:", error);
+      res.status(500).json({ message: "Erreur lors du réordonnancement" });
+    }
+  }
 }

@@ -40,6 +40,12 @@ router.delete(
   requireRole(["OWNER", "ADMIN", "EDITOR"]),
   SectionController.remove
 );
+// 🔹 🔀 REORDER
+router.post(
+  "/surveys/:surveyId/sections/:sectionId/reorder",
+  requireRole(["OWNER", "ADMIN"]),
+  SectionController.reorder
+);
 
 export default router;
 // ==============================
