@@ -164,67 +164,6 @@ const SurveyQuestionsPage = () => {
     return null;
   };
 
-  // const handleDragEnd = async (event: DragEndEvent) => {
-  //   if (isAdvanced) return;
-
-  //   const { active, over } = event;
-  //   if (!over || active.id === over.id) return;
-
-  //   const activeId = active.id as string;
-  //   const overId = over.id as string;
-
-  //   const sourceSectionId = findSectionIdByQuestionId(activeId);
-  //   const targetSectionId = findSectionIdByQuestionId(overId);
-
-  //   if (sourceSectionId === undefined) return;
-
-  //   const sourceKey = sourceSectionId ?? UNASSIGNED;
-  //   const targetKey = targetSectionId ?? UNASSIGNED;
-
-  //   const sourceList = [...questionsBySection[sourceKey]];
-  //   const targetList =
-  //     sourceKey === targetKey ? sourceList : [...questionsBySection[targetKey]];
-
-  //   const movedIndex = sourceList.findIndex((q) => q.id === activeId);
-  //   const targetIndex = targetList.findIndex((q) => q.id === overId);
-
-  //   if (movedIndex === -1 || targetIndex === -1) return;
-
-  //   const [moved] = sourceList.splice(movedIndex, 1);
-  //   targetList.splice(targetIndex, 0, moved);
-
-  //   const reordered: Question[] = [];
-
-  //   const rebuild = (list: Question[], sectionId: string | null) =>
-  //     list.forEach((q, i) =>
-  //       reordered.push({
-  //         ...q,
-  //         sectionId,
-  //         position: i + 1,
-  //       })
-  //     );
-
-  //   Object.entries(questionsBySection).forEach(([key, list]) => {
-  //     if (key === sourceKey) rebuild(sourceList, sourceSectionId);
-  //     else if (key === targetKey) rebuild(targetList, targetSectionId);
-  //     else rebuild(list, key === UNASSIGNED ? null : key);
-  //   });
-
-  //   dispatch({ type: "REORDER_QUESTIONS", payload: reordered });
-
-  //   try {
-  //     await questionService.reorder(
-  //       tenantSlug!,
-  //       surveyId!,
-  //       activeId,
-  //       sourceSectionId,
-  //       targetSectionId,
-  //       targetIndex + 1
-  //     );
-  //   } catch {
-  //     load(); // rollback
-  //   }
-  // };
   const handleDragEnd = async (event: DragEndEvent) => {
     if (isAdvanced) return;
 
@@ -338,7 +277,11 @@ const SurveyQuestionsPage = () => {
             ))}
           </select>
 
-          <QuestionForm onSubmit={createQuestion} allQuestions={questions} />
+          <QuestionForm
+            onSubmit={createQuestion}
+            allQuestions={questions}
+            sections={sections} // ← Ajouté
+          />
         </>
       )}
 
@@ -349,18 +292,6 @@ const SurveyQuestionsPage = () => {
             items={questionsBySection[section.id].map((q) => q.id)}
             strategy={verticalListSortingStrategy}
           >
-            {/* <SectionBlock section={section}>
-              {questionsBySection[section.id].map((q) => (
-                <SortableQuestionItem
-                  key={q.id}
-                  question={q}
-                  allQuestions={questions}
-                  onDelete={deleteQuestion}
-                  onUpdate={updateQuestion}
-                  disabled={isAdvanced}
-                />
-              ))}
-            </SectionBlock> */}
             <SectionBlock
               section={section}
               questions={questionsBySection[section.id]}
@@ -369,6 +300,7 @@ const SurveyQuestionsPage = () => {
                 <SortableQuestionItem
                   key={q.id}
                   question={q}
+                  sections={sections} // 🔹 ajouté
                   allQuestions={questions}
                   onDelete={deleteQuestion}
                   onUpdate={updateQuestion}
@@ -383,18 +315,6 @@ const SurveyQuestionsPage = () => {
           items={questionsBySection[UNASSIGNED].map((q) => q.id)}
           strategy={verticalListSortingStrategy}
         >
-          {/* <SectionBlock section={null}>
-            {questionsBySection[UNASSIGNED].map((q) => (
-              <SortableQuestionItem
-                key={q.id}
-                question={q}
-                allQuestions={questions}
-                onDelete={deleteQuestion}
-                onUpdate={updateQuestion}
-                disabled={isAdvanced}
-              />
-            ))}
-          </SectionBlock> */}
           <SectionBlock
             section={null}
             questions={questionsBySection[UNASSIGNED]}
@@ -403,6 +323,7 @@ const SurveyQuestionsPage = () => {
               <SortableQuestionItem
                 key={q.id}
                 question={q}
+                sections={sections} // 🔹 ajouté
                 allQuestions={questions}
                 onDelete={deleteQuestion}
                 onUpdate={updateQuestion}

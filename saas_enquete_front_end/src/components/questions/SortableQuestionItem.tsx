@@ -1,8 +1,10 @@
 // src/components/questions/SortableQuestionItem.tsx
-import React, { useEffect, useState } from "react";
+// src/components/questions/SortableQuestionItem.tsx
+import React, { useEffect, useState, useMemo } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Question } from "../../services/questionService";
+import { Section } from "../../services/sectionService";
 import { QuestionType } from "../../types/question";
 import QuestionPreview from "./QuestionPreview";
 import { useConfirm } from "../ConfirmProvider";
@@ -11,6 +13,7 @@ import "./SortableQuestionItem.css";
 interface Props {
   question: Question;
   allQuestions: Question[];
+  sections: Section[];
   onDelete: (id: string) => void;
   onUpdate: (id: string, data: Partial<Question>) => void;
   disabled?: boolean;
@@ -31,6 +34,7 @@ const QUESTION_TYPES: QuestionType[] = [
 const SortableQuestionItem: React.FC<Props> = ({
   question,
   allQuestions,
+  sections,
   onDelete,
   onUpdate,
   disabled,
@@ -61,17 +65,33 @@ const SortableQuestionItem: React.FC<Props> = ({
     question.nextMap || {}
   );
 
-  const [toast, setToast] = useState<{
-    message: string;
-    type: "success" | "danger";
-  } | null>(null);
-  const [errors, setErrors] = useState<string[]>([]);
-
   const confirm = useConfirm();
 
-  // ======================
-  // nextMap sync
-  // ======================
+  /* ======================
+     SECTION INDEX HELPERS
+  ====================== */
+  const sectionIndexMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    sections.forEach((s, idx) => (map[s.id] = idx));
+    return map;
+  }, [sections]);
+
+  const currentSectionIndex = sectionIndexMap[question.sectionId ?? ""] ?? 0;
+
+  const firstQuestionOfNextSectionId = useMemo(() => {
+    const nextSection = sections[currentSectionIndex + 1];
+    if (!nextSection) return null;
+
+    const qs = allQuestions
+      .filter((q) => q.sectionId === nextSection.id)
+      .sort((a, b) => a.position - b.position);
+
+    return qs.length > 0 ? qs[0].id : null;
+  }, [sections, allQuestions, currentSectionIndex]);
+
+  /* ======================
+     Sync nextMap
+  ====================== */
   useEffect(() => {
     if (type !== "SINGLE_CHOICE") {
       setNextMap({});
@@ -86,56 +106,70 @@ const SortableQuestionItem: React.FC<Props> = ({
     });
   }, [options, type]);
 
-  useEffect(() => {
-    if (toast) {
-      const timer = setTimeout(() => setToast(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [toast]);
+  const stopDrag = (e: React.SyntheticEvent) => e.stopPropagation();
 
-  // ======================
-  // VALIDATION
-  // ======================
-  const validate = (): boolean => {
-    const newErrors: string[] = [];
+  /* ======================
+     QUESTIONS GROUPÉES
+     AVEC WARNING VISUEL
+  ====================== */
+  const questionsBySection = useMemo(() => {
+    const map: Record<
+      string,
+      { question: Question; disabled: boolean; reason?: string }[]
+    > = {};
 
-    if (!label.trim()) newErrors.push("Le libellé est requis.");
+    allQuestions
+      .filter((q) => q.id !== question.id)
+      .forEach((q) => {
+        const targetSectionIndex = sectionIndexMap[q.sectionId ?? ""] ?? 0;
 
-    if (type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE") {
-      const filledOptions = options.filter((o) => o.trim());
-      if (filledOptions.length === 0)
-        newErrors.push("Au moins une option est requise.");
+        let allowed = false;
+        let reason = "";
 
-      Object.entries(nextMap).forEach(([opt, qid]) => {
-        if (
-          qid &&
-          !allQuestions.find(
-            (q) => q.id === qid && q.position > question.position
-          )
+        if (targetSectionIndex <= currentSectionIndex) {
+          allowed = true;
+        } else if (
+          targetSectionIndex === currentSectionIndex + 1 &&
+          q.id === firstQuestionOfNextSectionId
         ) {
-          newErrors.push(
-            `L'option "${opt}" pointe vers une question invalide.`
-          );
+          allowed = true;
+        } else {
+          reason = "⚠️ section ultérieure (non autorisée)";
         }
+
+        const key = q.sectionId || "__unassigned__";
+        if (!map[key]) map[key] = [];
+
+        map[key].push({
+          question: q,
+          disabled: !allowed,
+          reason,
+        });
       });
-    }
 
-    setErrors(newErrors);
-    console.log("errors", errors);
+    Object.values(map).forEach((list) =>
+      list.sort((a, b) => a.question.position - b.question.position)
+    );
 
-    if (newErrors.length) {
-      setToast({ message: newErrors.join(" "), type: "danger" });
-      return false;
-    }
-    return true;
+    return map;
+  }, [
+    allQuestions,
+    question.id,
+    sectionIndexMap,
+    currentSectionIndex,
+    firstQuestionOfNextSectionId,
+  ]);
+
+  const getSectionTitle = (sectionId: string) => {
+    if (sectionId === "__unassigned__") return "🗂️ Sans section";
+    const section = sections.find((s) => s.id === sectionId);
+    return section ? `📂 ${section.title}` : "📂 Section inconnue";
   };
 
-  // ======================
-  // SAVE
-  // ======================
+  /* ======================
+     SAVE
+  ====================== */
   const handleSave = () => {
-    if (!validate()) return;
-
     const payload: Partial<Question> = {
       label,
       type,
@@ -149,9 +183,9 @@ const SortableQuestionItem: React.FC<Props> = ({
 
     if (type === "SINGLE_CHOICE") {
       const cleanedNextMap: Record<string, string> = {};
-      Object.entries(nextMap).forEach(([key, value]) => {
-        if (payload.options?.includes(key) && value) {
-          cleanedNextMap[key] = value;
+      Object.entries(nextMap).forEach(([opt, qid]) => {
+        if (payload.options?.includes(opt) && qid) {
+          cleanedNextMap[opt] = qid;
         }
       });
       payload.nextMap = cleanedNextMap;
@@ -159,105 +193,20 @@ const SortableQuestionItem: React.FC<Props> = ({
 
     onUpdate(question.id, payload);
     setIsEditing(false);
-    setErrors([]);
-    setToast({
-      message: "Question sauvegardée avec succès !",
-      type: "success",
-    });
   };
 
-  // ======================
-  // DELETE QUESTION
-  // ======================
+  /* ======================
+     DELETE
+  ====================== */
   const handleDelete = async () => {
-    const result = await confirm(
-      <>
-        <p>Es-tu sûr de vouloir supprimer la question :</p>
-        <strong>{question.label}</strong>
-        <p className="text-danger mt-2">Cette action est irréversible.</p>
-      </>,
-      {
-        title: "Confirmer la suppression",
-        confirmText: "Supprimer",
-        cancelText: "Annuler",
-      }
-    );
-
-    if (result) onDelete(question.id);
-  };
-
-  // ======================
-  // DELETE OPTION (🆕)
-  // ======================
-  const handleDeleteOption = async (opt: string, index: number) => {
     const confirmed = await confirm(
       <>
-        <p>
-          Supprimer l’option <strong>« {opt || "Option vide"} »</strong> ?
-        </p>
-        {type === "SINGLE_CHOICE" && (
-          <p className="text-warning mt-2">
-            ⚠️ Toute condition associée (nextMap) sera supprimée.
-          </p>
-        )}
+        <p>Supprimer la question :</p>
+        <strong>{question.label}</strong>
       </>,
-      {
-        title: "Supprimer l’option",
-        confirmText: "Supprimer",
-        cancelText: "Annuler",
-      }
+      { title: "Confirmation", confirmText: "Supprimer" }
     );
-
-    if (!confirmed) return;
-
-    setOptions((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const stopDrag = (e: React.SyntheticEvent) => e.stopPropagation();
-  // ==================================
-  // SUPPRESSION DE CHANGEMENT DE TYPE QUESTION EXPLE:SINGLE_CHOICE → TEXT supprime options + nextMap).
-  // ==================================
-  const handleTypeChange = async (newType: QuestionType) => {
-    const isChoiceType = type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE";
-    const willLoseOptions =
-      isChoiceType &&
-      newType !== "SINGLE_CHOICE" &&
-      newType !== "MULTIPLE_CHOICE";
-
-    if (willLoseOptions && options.filter((o) => o.trim()).length > 0) {
-      const confirmed = await confirm(
-        <>
-          <p>
-            Changer le type de la question va supprimer toutes les options
-            existantes.
-          </p>
-          {type === "SINGLE_CHOICE" && (
-            <p className="text-warning mt-2">
-              ⚠️ Les conditions (nextMap) seront également supprimées.
-            </p>
-          )}
-        </>,
-        {
-          title: "Changer le type de la question",
-          confirmText: "Continuer",
-          cancelText: "Annuler",
-        }
-      );
-
-      if (!confirmed) return;
-    }
-
-    setType(newType);
-
-    // Nettoyage volontaire des données incompatibles
-    if (newType !== "SINGLE_CHOICE" && newType !== "MULTIPLE_CHOICE") {
-      setOptions([]);
-      setNextMap({});
-    }
-
-    if (newType === "MULTIPLE_CHOICE") {
-      setNextMap({});
-    }
+    if (confirmed) onDelete(question.id);
   };
 
   return (
@@ -286,13 +235,11 @@ const SortableQuestionItem: React.FC<Props> = ({
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
               />
+
               <select
                 className="form-select mb-2"
                 value={type}
-                // onChange={(e) => setType(e.target.value as QuestionType)}
-                onChange={(e) =>
-                  handleTypeChange(e.target.value as QuestionType)
-                }
+                onChange={(e) => setType(e.target.value as QuestionType)}
               >
                 {QUESTION_TYPES.map((t) => (
                   <option key={t} value={t}>
@@ -300,6 +247,7 @@ const SortableQuestionItem: React.FC<Props> = ({
                   </option>
                 ))}
               </select>
+
               {(type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE") && (
                 <div className="mb-2">
                   <strong>Options</strong>
@@ -319,7 +267,9 @@ const SortableQuestionItem: React.FC<Props> = ({
                         type="button"
                         onPointerDown={stopDrag}
                         onMouseDown={stopDrag}
-                        onClick={() => handleDeleteOption(opt, i)}
+                        onClick={() =>
+                          setOptions(options.filter((_, idx) => idx !== i))
+                        }
                       >
                         ✖
                       </button>
@@ -327,24 +277,23 @@ const SortableQuestionItem: React.FC<Props> = ({
                   ))}
                   <button
                     className="btn btn-sm btn-primary"
-                    type="button"
-                    onPointerDown={stopDrag}
-                    onMouseDown={stopDrag}
                     onClick={() => setOptions([...options, ""])}
                   >
                     + Ajouter option
                   </button>
                 </div>
               )}
-              {/* =========== Condition SIMPLE============= */}
 
+              {/* ========= CONDITION SIMPLE ========= */}
               {type === "SINGLE_CHOICE" &&
                 options.filter((o) => o.trim()).length > 0 && (
                   <div className="mb-2">
                     <strong>Condition SIMPLE (nextMap)</strong>
+
                     {options.map((opt) => (
                       <div key={opt} className="input-group mb-1">
                         <span className="input-group-text">{opt} →</span>
+
                         <select
                           className="form-select"
                           value={nextMap[opt] || ""}
@@ -358,35 +307,42 @@ const SortableQuestionItem: React.FC<Props> = ({
                           <option value="">
                             -- Choisir la question suivante --
                           </option>
-                          {allQuestions
-                            .filter(
-                              (q) =>
-                                q.position > question.position &&
-                                q.id !== question.id
+
+                          {Object.entries(questionsBySection).map(
+                            ([sectionId, entries]) => (
+                              <optgroup
+                                key={sectionId}
+                                label={getSectionTitle(sectionId)}
+                              >
+                                {entries.map(
+                                  ({ question: q, disabled, reason }) => (
+                                    <option
+                                      key={q.id}
+                                      value={q.id}
+                                      disabled={disabled}
+                                    >
+                                      {q.position}. {q.label}
+                                      {disabled ? ` ${reason}` : ""}
+                                    </option>
+                                  )
+                                )}
+                              </optgroup>
                             )
-                            .map((q) => (
-                              <option key={q.id} value={q.id}>
-                                {q.position}. {q.label}
-                              </option>
-                            ))}
+                          )}
                         </select>
                       </div>
                     ))}
                   </div>
                 )}
-              {/* ======================== */}
+
               <button
                 className="btn btn-sm btn-success me-2"
-                onPointerDown={stopDrag}
-                onMouseDown={stopDrag}
                 onClick={handleSave}
               >
                 💾 Sauver
               </button>
               <button
                 className="btn btn-sm btn-secondary"
-                onPointerDown={stopDrag}
-                onMouseDown={stopDrag}
                 onClick={() => setIsEditing(false)}
               >
                 ❌ Annuler
@@ -401,11 +357,9 @@ const SortableQuestionItem: React.FC<Props> = ({
 
               <button
                 className="btn btn-sm btn-outline-secondary ms-2"
-                onPointerDown={stopDrag}
-                onMouseDown={stopDrag}
                 onClick={() => setShowPreview((p) => !p)}
               >
-                👁️ {showPreview ? "Masquer aperçu" : "Afficher aperçu"}
+                👁️ Aperçu
               </button>
             </>
           )}
@@ -427,18 +381,11 @@ const SortableQuestionItem: React.FC<Props> = ({
           <div className="btn-group btn-group-sm ms-2">
             <button
               className="btn btn-outline-primary"
-              onPointerDown={stopDrag}
-              onMouseDown={stopDrag}
               onClick={() => setIsEditing(true)}
             >
               ✏️
             </button>
-            <button
-              className="btn btn-outline-danger"
-              onPointerDown={stopDrag}
-              onMouseDown={stopDrag}
-              onClick={handleDelete}
-            >
+            <button className="btn btn-outline-danger" onClick={handleDelete}>
               🗑️
             </button>
           </div>
@@ -449,6 +396,1252 @@ const SortableQuestionItem: React.FC<Props> = ({
 };
 
 export default SortableQuestionItem;
+
+// // ========================================== BON avec separation des questions par section
+// // src/components/questions/SortableQuestionItem.tsx
+// import React, { useEffect, useState, useMemo } from "react";
+// import { useSortable } from "@dnd-kit/sortable";
+// import { CSS } from "@dnd-kit/utilities";
+// import { Question } from "../../services/questionService";
+// import { Section } from "../../services/sectionService";
+// import { QuestionType } from "../../types/question";
+// import QuestionPreview from "./QuestionPreview";
+// import { useConfirm } from "../ConfirmProvider";
+// import "./SortableQuestionItem.css";
+
+// interface Props {
+//   question: Question;
+//   allQuestions: Question[];
+//   sections: Section[];
+//   onDelete: (id: string) => void;
+//   onUpdate: (id: string, data: Partial<Question>) => void;
+//   disabled?: boolean;
+// }
+
+// const QUESTION_TYPES: QuestionType[] = [
+//   "TEXT",
+//   "TEXTAREA",
+//   "NUMBER",
+//   "SCALE",
+//   "SINGLE_CHOICE",
+//   "MULTIPLE_CHOICE",
+//   "DATE",
+//   "EMAIL",
+//   "PHONE",
+// ];
+
+// const SortableQuestionItem: React.FC<Props> = ({
+//   question,
+//   allQuestions,
+//   sections,
+//   onDelete,
+//   onUpdate,
+//   disabled,
+// }) => {
+//   const {
+//     attributes,
+//     listeners,
+//     setNodeRef,
+//     transform,
+//     transition,
+//     isDragging,
+//   } = useSortable({ id: question.id });
+
+//   const style = {
+//     transform: CSS.Transform.toString(transform),
+//     transition,
+//     backgroundColor: isDragging ? "#e0f7fa" : "white",
+//   };
+
+//   const [isEditing, setIsEditing] = useState(false);
+//   const [showPreview, setShowPreview] = useState(false);
+
+//   const [label, setLabel] = useState(question.label);
+//   const [type, setType] = useState<QuestionType>(question.type);
+//   const [options, setOptions] = useState<string[]>(question.options || []);
+//   const [config, setConfig] = useState(question.config);
+//   const [nextMap, setNextMap] = useState<Record<string, string>>(
+//     question.nextMap || {}
+//   );
+
+//   const confirm = useConfirm();
+
+//   /* ======================
+//      SECTION INDEX HELPERS
+//   ====================== */
+//   const sectionIndexMap = useMemo(() => {
+//     const map: Record<string, number> = {};
+//     sections.forEach((s, idx) => {
+//       map[s.id] = idx;
+//     });
+//     return map;
+//   }, [sections]);
+
+//   const currentSectionIndex = sectionIndexMap[question.sectionId ?? ""] ?? 0;
+
+//   const firstQuestionOfNextSectionId = useMemo(() => {
+//     const nextSection = sections[currentSectionIndex + 1];
+//     if (!nextSection) return null;
+
+//     const questions = allQuestions
+//       .filter((q) => q.sectionId === nextSection.id)
+//       .sort((a, b) => a.position - b.position);
+
+//     return questions.length > 0 ? questions[0].id : null;
+//   }, [sections, allQuestions, currentSectionIndex]);
+
+//   /* ======================
+//      Sync nextMap
+//   ====================== */
+//   useEffect(() => {
+//     if (type !== "SINGLE_CHOICE") {
+//       setNextMap({});
+//       return;
+//     }
+//     setNextMap((prev) => {
+//       const cleaned: Record<string, string> = {};
+//       options.forEach((opt) => {
+//         if (opt.trim()) cleaned[opt] = prev[opt] || "";
+//       });
+//       return cleaned;
+//     });
+//   }, [options, type]);
+
+//   const stopDrag = (e: React.SyntheticEvent) => e.stopPropagation();
+
+//   /* ======================
+//      QUESTIONS SUIVANTES
+//      (RÈGLE MÉTIER APPLIQUÉE)
+//   ====================== */
+//   const questionsBySection = useMemo(() => {
+//     const map: Record<string, Question[]> = {};
+
+//     allQuestions
+//       .filter((q) => q.id !== question.id)
+//       .forEach((q) => {
+//         const targetSectionIndex = sectionIndexMap[q.sectionId ?? ""] ?? 0;
+
+//         let allowed = false;
+
+//         // même section ou section précédente
+//         if (targetSectionIndex <= currentSectionIndex) {
+//           allowed = true;
+//         }
+
+//         // première question de la section suivante uniquement
+//         if (
+//           targetSectionIndex === currentSectionIndex + 1 &&
+//           q.id === firstQuestionOfNextSectionId
+//         ) {
+//           allowed = true;
+//         }
+
+//         if (!allowed) return;
+
+//         const key = q.sectionId || "__unassigned__";
+//         if (!map[key]) map[key] = [];
+//         map[key].push(q);
+//       });
+
+//     // tri par position dans chaque section
+//     Object.values(map).forEach((list) =>
+//       list.sort((a, b) => a.position - b.position)
+//     );
+
+//     return map;
+//   }, [
+//     allQuestions,
+//     question.id,
+//     sectionIndexMap,
+//     currentSectionIndex,
+//     firstQuestionOfNextSectionId,
+//   ]);
+
+//   const getSectionTitle = (sectionId: string) => {
+//     if (sectionId === "__unassigned__") return "🗂️ Sans section";
+//     const section = sections.find((s) => s.id === sectionId);
+//     return section ? `📂 ${section.title}` : "📂 Section inconnue";
+//   };
+
+//   /* ======================
+//      SAVE
+//   ====================== */
+//   const handleSave = () => {
+//     const payload: Partial<Question> = {
+//       label,
+//       type,
+//       config,
+//       position: question.position,
+//     };
+
+//     if (type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE") {
+//       payload.options = options.filter((o) => o.trim());
+//     }
+
+//     if (type === "SINGLE_CHOICE") {
+//       const cleanedNextMap: Record<string, string> = {};
+//       Object.entries(nextMap).forEach(([opt, qid]) => {
+//         if (payload.options?.includes(opt) && qid) {
+//           cleanedNextMap[opt] = qid;
+//         }
+//       });
+//       payload.nextMap = cleanedNextMap;
+//     }
+
+//     onUpdate(question.id, payload);
+//     setIsEditing(false);
+//   };
+
+//   /* ======================
+//      DELETE
+//   ====================== */
+//   const handleDelete = async () => {
+//     const confirmed = await confirm(
+//       <>
+//         <p>Supprimer la question :</p>
+//         <strong>{question.label}</strong>
+//       </>,
+//       { title: "Confirmation", confirmText: "Supprimer" }
+//     );
+//     if (confirmed) onDelete(question.id);
+//   };
+
+//   return (
+//     <div
+//       ref={setNodeRef}
+//       style={style}
+//       className="list-group-item mb-2 rounded shadow-sm"
+//     >
+//       <div className="d-flex justify-content-between align-items-start">
+//         {!disabled && (
+//           <span
+//             className="me-2 text-muted"
+//             style={{ cursor: "grab" }}
+//             {...attributes}
+//             {...listeners}
+//           >
+//             ☰
+//           </span>
+//         )}
+
+//         <div className="flex-grow-1">
+//           {isEditing ? (
+//             <>
+//               <input
+//                 className="form-control mb-2"
+//                 value={label}
+//                 onChange={(e) => setLabel(e.target.value)}
+//               />
+
+//               <select
+//                 className="form-select mb-2"
+//                 value={type}
+//                 onChange={(e) => setType(e.target.value as QuestionType)}
+//               >
+//                 {QUESTION_TYPES.map((t) => (
+//                   <option key={t} value={t}>
+//                     {t}
+//                   </option>
+//                 ))}
+//               </select>
+
+//               {(type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE") && (
+//                 <div className="mb-2">
+//                   <strong>Options</strong>
+//                   {options.map((opt, i) => (
+//                     <div key={i} className="input-group mb-1">
+//                       <input
+//                         className="form-control"
+//                         value={opt}
+//                         onChange={(e) => {
+//                           const copy = [...options];
+//                           copy[i] = e.target.value;
+//                           setOptions(copy);
+//                         }}
+//                       />
+//                       <button
+//                         className="btn btn-outline-danger"
+//                         type="button"
+//                         onPointerDown={stopDrag}
+//                         onMouseDown={stopDrag}
+//                         onClick={() =>
+//                           setOptions(options.filter((_, idx) => idx !== i))
+//                         }
+//                       >
+//                         ✖
+//                       </button>
+//                     </div>
+//                   ))}
+//                   <button
+//                     className="btn btn-sm btn-primary"
+//                     onClick={() => setOptions([...options, ""])}
+//                   >
+//                     + Ajouter option
+//                   </button>
+//                 </div>
+//               )}
+
+//               {/* ========= CONDITION SIMPLE ========= */}
+//               {type === "SINGLE_CHOICE" &&
+//                 options.filter((o) => o.trim()).length > 0 && (
+//                   <div className="mb-2">
+//                     <strong>Condition SIMPLE (nextMap)</strong>
+
+//                     {options.map((opt) => (
+//                       <div key={opt} className="input-group mb-1">
+//                         <span className="input-group-text">{opt} →</span>
+
+//                         <select
+//                           className="form-select"
+//                           value={nextMap[opt] || ""}
+//                           onChange={(e) =>
+//                             setNextMap((prev) => ({
+//                               ...prev,
+//                               [opt]: e.target.value,
+//                             }))
+//                           }
+//                         >
+//                           <option value="">
+//                             -- Choisir la question suivante --
+//                           </option>
+
+//                           {Object.entries(questionsBySection).map(
+//                             ([sectionId, questions]) => (
+//                               <optgroup
+//                                 key={sectionId}
+//                                 label={getSectionTitle(sectionId)}
+//                               >
+//                                 {questions.map((q) => (
+//                                   <option key={q.id} value={q.id}>
+//                                     {q.position}. {q.label}
+//                                   </option>
+//                                 ))}
+//                               </optgroup>
+//                             )
+//                           )}
+//                         </select>
+//                       </div>
+//                     ))}
+//                   </div>
+//                 )}
+
+//               <button
+//                 className="btn btn-sm btn-success me-2"
+//                 onClick={handleSave}
+//               >
+//                 💾 Sauver
+//               </button>
+//               <button
+//                 className="btn btn-sm btn-secondary"
+//                 onClick={() => setIsEditing(false)}
+//               >
+//                 ❌ Annuler
+//               </button>
+//             </>
+//           ) : (
+//             <>
+//               <strong>
+//                 {question.position}. {question.label}
+//               </strong>
+//               <span className="badge bg-info ms-2">{question.type}</span>
+
+//               <button
+//                 className="btn btn-sm btn-outline-secondary ms-2"
+//                 onClick={() => setShowPreview((p) => !p)}
+//               >
+//                 👁️ Aperçu
+//               </button>
+//             </>
+//           )}
+
+//           {showPreview && !isEditing && (
+//             <div className="mt-2">
+//               <QuestionPreview
+//                 label={label}
+//                 type={type}
+//                 options={options}
+//                 config={config}
+//                 nextMap={nextMap}
+//               />
+//             </div>
+//           )}
+//         </div>
+
+//         {!disabled && !isEditing && (
+//           <div className="btn-group btn-group-sm ms-2">
+//             <button
+//               className="btn btn-outline-primary"
+//               onClick={() => setIsEditing(true)}
+//             >
+//               ✏️
+//             </button>
+//             <button className="btn btn-outline-danger" onClick={handleDelete}>
+//               🗑️
+//             </button>
+//           </div>
+//         )}
+//       </div>
+//     </div>
+//   );
+// };
+
+// export default SortableQuestionItem;
+
+// // ========================================== BON avec separation des questions par section
+// // src/components/questions/SortableQuestionItem.tsx
+// import React, { useEffect, useState, useMemo } from "react";
+// import { useSortable } from "@dnd-kit/sortable";
+// import { CSS } from "@dnd-kit/utilities";
+// import { Question } from "../../services/questionService";
+// import { Section } from "../../services/sectionService";
+// import { QuestionType } from "../../types/question";
+// import QuestionPreview from "./QuestionPreview";
+// import { useConfirm } from "../ConfirmProvider";
+// import "./SortableQuestionItem.css";
+
+// interface Props {
+//   question: Question;
+//   allQuestions: Question[];
+//   sections: Section[];
+//   onDelete: (id: string) => void;
+//   onUpdate: (id: string, data: Partial<Question>) => void;
+//   disabled?: boolean;
+// }
+
+// const QUESTION_TYPES: QuestionType[] = [
+//   "TEXT",
+//   "TEXTAREA",
+//   "NUMBER",
+//   "SCALE",
+//   "SINGLE_CHOICE",
+//   "MULTIPLE_CHOICE",
+//   "DATE",
+//   "EMAIL",
+//   "PHONE",
+// ];
+
+// const SortableQuestionItem: React.FC<Props> = ({
+//   question,
+//   allQuestions,
+//   sections,
+//   onDelete,
+//   onUpdate,
+//   disabled,
+// }) => {
+//   const {
+//     attributes,
+//     listeners,
+//     setNodeRef,
+//     transform,
+//     transition,
+//     isDragging,
+//   } = useSortable({ id: question.id });
+
+//   const style = {
+//     transform: CSS.Transform.toString(transform),
+//     transition,
+//     backgroundColor: isDragging ? "#e0f7fa" : "white",
+//   };
+
+//   const [isEditing, setIsEditing] = useState(false);
+//   const [showPreview, setShowPreview] = useState(false);
+
+//   const [label, setLabel] = useState(question.label);
+//   const [type, setType] = useState<QuestionType>(question.type);
+//   const [options, setOptions] = useState<string[]>(question.options || []);
+//   const [config, setConfig] = useState(question.config);
+//   const [nextMap, setNextMap] = useState<Record<string, string>>(
+//     question.nextMap || {}
+//   );
+
+//   const confirm = useConfirm();
+
+//   /* ======================
+//      Sync nextMap
+//   ====================== */
+//   useEffect(() => {
+//     if (type !== "SINGLE_CHOICE") {
+//       setNextMap({});
+//       return;
+//     }
+//     setNextMap((prev) => {
+//       const cleaned: Record<string, string> = {};
+//       options.forEach((opt) => {
+//         if (opt.trim()) cleaned[opt] = prev[opt] || "";
+//       });
+//       return cleaned;
+//     });
+//   }, [options, type]);
+
+//   const stopDrag = (e: React.SyntheticEvent) => e.stopPropagation();
+
+//   /* ======================
+//      QUESTIONS SUIVANTES
+//      GROUPÉES PAR SECTION
+//   ====================== */
+//   const questionsBySection = useMemo(() => {
+//     const map: Record<string, Question[]> = {};
+
+//     allQuestions
+//       .filter((q) => q.position > question.position && q.id !== question.id)
+//       .forEach((q) => {
+//         const key = q.sectionId || "__unassigned__";
+//         if (!map[key]) map[key] = [];
+//         map[key].push(q);
+//       });
+
+//     return map;
+//   }, [allQuestions, question.position, question.id]);
+
+//   const getSectionTitle = (sectionId: string) => {
+//     if (sectionId === "__unassigned__") return "🗂️ Sans section";
+//     const section = sections.find((s) => s.id === sectionId);
+//     return section ? `📂 ${section.title}` : "📂 Section inconnue";
+//   };
+
+//   /* ======================
+//      SAVE
+//   ====================== */
+//   const handleSave = () => {
+//     const payload: Partial<Question> = {
+//       label,
+//       type,
+//       config,
+//       position: question.position,
+//     };
+
+//     if (type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE") {
+//       payload.options = options.filter((o) => o.trim());
+//     }
+
+//     if (type === "SINGLE_CHOICE") {
+//       const cleanedNextMap: Record<string, string> = {};
+//       Object.entries(nextMap).forEach(([opt, qid]) => {
+//         if (payload.options?.includes(opt) && qid) {
+//           cleanedNextMap[opt] = qid;
+//         }
+//       });
+//       payload.nextMap = cleanedNextMap;
+//     }
+
+//     onUpdate(question.id, payload);
+//     setIsEditing(false);
+//   };
+
+//   /* ======================
+//      DELETE
+//   ====================== */
+//   const handleDelete = async () => {
+//     const confirmed = await confirm(
+//       <>
+//         <p>Supprimer la question :</p>
+//         <strong>{question.label}</strong>
+//       </>,
+//       { title: "Confirmation", confirmText: "Supprimer" }
+//     );
+//     if (confirmed) onDelete(question.id);
+//   };
+
+//   return (
+//     <div
+//       ref={setNodeRef}
+//       style={style}
+//       className="list-group-item mb-2 rounded shadow-sm"
+//     >
+//       <div className="d-flex justify-content-between align-items-start">
+//         {!disabled && (
+//           <span
+//             className="me-2 text-muted"
+//             style={{ cursor: "grab" }}
+//             {...attributes}
+//             {...listeners}
+//           >
+//             ☰
+//           </span>
+//         )}
+
+//         <div className="flex-grow-1">
+//           {isEditing ? (
+//             <>
+//               <input
+//                 className="form-control mb-2"
+//                 value={label}
+//                 onChange={(e) => setLabel(e.target.value)}
+//               />
+
+//               <select
+//                 className="form-select mb-2"
+//                 value={type}
+//                 onChange={(e) => setType(e.target.value as QuestionType)}
+//               >
+//                 {QUESTION_TYPES.map((t) => (
+//                   <option key={t} value={t}>
+//                     {t}
+//                   </option>
+//                 ))}
+//               </select>
+
+//               {(type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE") && (
+//                 <div className="mb-2">
+//                   <strong>Options</strong>
+//                   {options.map((opt, i) => (
+//                     <div key={i} className="input-group mb-1">
+//                       <input
+//                         className="form-control"
+//                         value={opt}
+//                         onChange={(e) => {
+//                           const copy = [...options];
+//                           copy[i] = e.target.value;
+//                           setOptions(copy);
+//                         }}
+//                       />
+//                       <button
+//                         className="btn btn-outline-danger"
+//                         type="button"
+//                         onPointerDown={stopDrag}
+//                         onMouseDown={stopDrag}
+//                         onClick={() =>
+//                           setOptions(options.filter((_, idx) => idx !== i))
+//                         }
+//                       >
+//                         ✖
+//                       </button>
+//                     </div>
+//                   ))}
+//                   <button
+//                     className="btn btn-sm btn-primary"
+//                     onClick={() => setOptions([...options, ""])}
+//                   >
+//                     + Ajouter option
+//                   </button>
+//                 </div>
+//               )}
+
+//               {/* ========= CONDITION SIMPLE ========= */}
+//               {type === "SINGLE_CHOICE" &&
+//                 options.filter((o) => o.trim()).length > 0 && (
+//                   <div className="mb-2">
+//                     <strong>Condition SIMPLE (nextMap)</strong>
+
+//                     {options.map((opt) => (
+//                       <div key={opt} className="input-group mb-1">
+//                         <span className="input-group-text">{opt} →</span>
+
+//                         <select
+//                           className="form-select"
+//                           value={nextMap[opt] || ""}
+//                           onChange={(e) =>
+//                             setNextMap((prev) => ({
+//                               ...prev,
+//                               [opt]: e.target.value,
+//                             }))
+//                           }
+//                         >
+//                           <option value="">
+//                             -- Choisir la question suivante --
+//                           </option>
+
+//                           {Object.entries(questionsBySection).map(
+//                             ([sectionId, questions]) => (
+//                               <optgroup
+//                                 key={sectionId}
+//                                 label={getSectionTitle(sectionId)}
+//                               >
+//                                 {questions.map((q) => (
+//                                   <option key={q.id} value={q.id}>
+//                                     {q.position}. {q.label}
+//                                   </option>
+//                                 ))}
+//                               </optgroup>
+//                             )
+//                           )}
+//                         </select>
+//                       </div>
+//                     ))}
+//                   </div>
+//                 )}
+
+//               <button
+//                 className="btn btn-sm btn-success me-2"
+//                 onClick={handleSave}
+//               >
+//                 💾 Sauver
+//               </button>
+//               <button
+//                 className="btn btn-sm btn-secondary"
+//                 onClick={() => setIsEditing(false)}
+//               >
+//                 ❌ Annuler
+//               </button>
+//             </>
+//           ) : (
+//             <>
+//               <strong>
+//                 {question.position}. {question.label}
+//               </strong>
+//               <span className="badge bg-info ms-2">{question.type}</span>
+
+//               <button
+//                 className="btn btn-sm btn-outline-secondary ms-2"
+//                 onClick={() => setShowPreview((p) => !p)}
+//               >
+//                 👁️ Aperçu
+//               </button>
+//             </>
+//           )}
+
+//           {showPreview && !isEditing && (
+//             <div className="mt-2">
+//               <QuestionPreview
+//                 label={label}
+//                 type={type}
+//                 options={options}
+//                 config={config}
+//                 nextMap={nextMap}
+//               />
+//             </div>
+//           )}
+//         </div>
+
+//         {!disabled && !isEditing && (
+//           <div className="btn-group btn-group-sm ms-2">
+//             <button
+//               className="btn btn-outline-primary"
+//               onClick={() => setIsEditing(true)}
+//             >
+//               ✏️
+//             </button>
+//             <button className="btn btn-outline-danger" onClick={handleDelete}>
+//               🗑️
+//             </button>
+//           </div>
+//         )}
+//       </div>
+//     </div>
+//   );
+// };
+
+// export default SortableQuestionItem;
+
+// // // // ========================================== BON avec separation des questions par section
+// // src/components/questions/SortableQuestionItem.tsx
+// import React, { useEffect, useState } from "react";
+// import { useSortable } from "@dnd-kit/sortable";
+// import { CSS } from "@dnd-kit/utilities";
+// import { Question } from "../../services/questionService";
+// import { QuestionType } from "../../types/question";
+// import QuestionPreview from "./QuestionPreview";
+// import { useConfirm } from "../ConfirmProvider";
+// import "./SortableQuestionItem.css";
+
+// interface Props {
+//   question: Question;
+//   allQuestions: Question[];
+//   onDelete: (id: string) => void;
+//   onUpdate: (id: string, data: Partial<Question>) => void;
+//   disabled?: boolean;
+// }
+
+// const QUESTION_TYPES: QuestionType[] = [
+//   "TEXT",
+//   "TEXTAREA",
+//   "NUMBER",
+//   "SCALE",
+//   "SINGLE_CHOICE",
+//   "MULTIPLE_CHOICE",
+//   "DATE",
+//   "EMAIL",
+//   "PHONE",
+// ];
+
+// const SortableQuestionItem: React.FC<Props> = ({
+//   question,
+//   allQuestions,
+//   onDelete,
+//   onUpdate,
+//   disabled,
+// }) => {
+//   const {
+//     attributes,
+//     listeners,
+//     setNodeRef,
+//     transform,
+//     transition,
+//     isDragging,
+//   } = useSortable({ id: question.id });
+
+//   const style = {
+//     transform: CSS.Transform.toString(transform),
+//     transition,
+//     backgroundColor: isDragging ? "#e0f7fa" : "white",
+//   };
+
+//   const [isEditing, setIsEditing] = useState(false);
+//   const [showPreview, setShowPreview] = useState(false);
+
+//   const [label, setLabel] = useState(question.label);
+//   const [type, setType] = useState<QuestionType>(question.type);
+//   const [options, setOptions] = useState<string[]>(question.options || []);
+//   const [config, setConfig] = useState(question.config);
+//   const [nextMap, setNextMap] = useState<Record<string, string>>(
+//     question.nextMap || {}
+//   );
+
+//   const [toast, setToast] = useState<{
+//     message: string;
+//     type: "success" | "danger";
+//   } | null>(null);
+//   const [errors, setErrors] = useState<string[]>([]);
+
+//   const confirm = useConfirm();
+
+//   // ======================
+//   // nextMap sync
+//   // ======================
+//   useEffect(() => {
+//     if (type !== "SINGLE_CHOICE") {
+//       setNextMap({});
+//       return;
+//     }
+//     setNextMap((prev) => {
+//       const cleaned: Record<string, string> = {};
+//       options.forEach((opt) => {
+//         if (opt.trim()) cleaned[opt] = prev[opt] || "";
+//       });
+//       return cleaned;
+//     });
+//   }, [options, type]);
+
+//   useEffect(() => {
+//     if (toast) {
+//       const timer = setTimeout(() => setToast(null), 3000);
+//       return () => clearTimeout(timer);
+//     }
+//   }, [toast]);
+
+//   // ======================
+//   // VALIDATION
+//   // ======================
+//   const validate = (): boolean => {
+//     const newErrors: string[] = [];
+
+//     if (!label.trim()) newErrors.push("Le libellé est requis.");
+
+//     if (type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE") {
+//       const filledOptions = options.filter((o) => o.trim());
+//       if (filledOptions.length === 0)
+//         newErrors.push("Au moins une option est requise.");
+
+//       Object.entries(nextMap).forEach(([opt, qid]) => {
+//         if (
+//           qid &&
+//           !allQuestions.find(
+//             (q) => q.id === qid && q.position > question.position
+//           )
+//         ) {
+//           newErrors.push(
+//             `L'option "${opt}" pointe vers une question invalide.`
+//           );
+//         }
+//       });
+//     }
+
+//     setErrors(newErrors);
+//     console.log("errors", errors);
+
+//     if (newErrors.length) {
+//       setToast({ message: newErrors.join(" "), type: "danger" });
+//       return false;
+//     }
+//     return true;
+//   };
+
+//   // ======================
+//   // SAVE
+//   // ======================
+//   const handleSave = () => {
+//     if (!validate()) return;
+
+//     const payload: Partial<Question> = {
+//       label,
+//       type,
+//       config,
+//       position: question.position,
+//     };
+
+//     if (type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE") {
+//       payload.options = options.filter((o) => o.trim());
+//     }
+
+//     if (type === "SINGLE_CHOICE") {
+//       const cleanedNextMap: Record<string, string> = {};
+//       Object.entries(nextMap).forEach(([key, value]) => {
+//         if (payload.options?.includes(key) && value) {
+//           cleanedNextMap[key] = value;
+//         }
+//       });
+//       payload.nextMap = cleanedNextMap;
+//     }
+
+//     onUpdate(question.id, payload);
+//     setIsEditing(false);
+//     setErrors([]);
+//     setToast({
+//       message: "Question sauvegardée avec succès !",
+//       type: "success",
+//     });
+//   };
+
+//   // ======================
+//   // DELETE QUESTION
+//   // ======================
+//   const handleDelete = async () => {
+//     const result = await confirm(
+//       <>
+//         <p>Es-tu sûr de vouloir supprimer la question :</p>
+//         <strong>{question.label}</strong>
+//         <p className="text-danger mt-2">Cette action est irréversible.</p>
+//       </>,
+//       {
+//         title: "Confirmer la suppression",
+//         confirmText: "Supprimer",
+//         cancelText: "Annuler",
+//       }
+//     );
+
+//     if (result) onDelete(question.id);
+//   };
+
+//   // ======================
+//   // DELETE OPTION (🆕)
+//   // ======================
+//   const handleDeleteOption = async (opt: string, index: number) => {
+//     const confirmed = await confirm(
+//       <>
+//         <p>
+//           Supprimer l’option <strong>« {opt || "Option vide"} »</strong> ?
+//         </p>
+//         {type === "SINGLE_CHOICE" && (
+//           <p className="text-warning mt-2">
+//             ⚠️ Toute condition associée (nextMap) sera supprimée.
+//           </p>
+//         )}
+//       </>,
+//       {
+//         title: "Supprimer l’option",
+//         confirmText: "Supprimer",
+//         cancelText: "Annuler",
+//       }
+//     );
+
+//     if (!confirmed) return;
+
+//     setOptions((prev) => prev.filter((_, i) => i !== index));
+//   };
+
+//   const stopDrag = (e: React.SyntheticEvent) => e.stopPropagation();
+//   // ==================================
+//   // SUPPRESSION DE CHANGEMENT DE TYPE QUESTION EXPLE:SINGLE_CHOICE → TEXT supprime options + nextMap).
+//   // ==================================
+//   const handleTypeChange = async (newType: QuestionType) => {
+//     const isChoiceType = type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE";
+//     const willLoseOptions =
+//       isChoiceType &&
+//       newType !== "SINGLE_CHOICE" &&
+//       newType !== "MULTIPLE_CHOICE";
+
+//     if (willLoseOptions && options.filter((o) => o.trim()).length > 0) {
+//       const confirmed = await confirm(
+//         <>
+//           <p>
+//             Changer le type de la question va supprimer toutes les options
+//             existantes.
+//           </p>
+//           {type === "SINGLE_CHOICE" && (
+//             <p className="text-warning mt-2">
+//               ⚠️ Les conditions (nextMap) seront également supprimées.
+//             </p>
+//           )}
+//         </>,
+//         {
+//           title: "Changer le type de la question",
+//           confirmText: "Continuer",
+//           cancelText: "Annuler",
+//         }
+//       );
+
+//       if (!confirmed) return;
+//     }
+
+//     setType(newType);
+
+//     // Nettoyage volontaire des données incompatibles
+//     if (newType !== "SINGLE_CHOICE" && newType !== "MULTIPLE_CHOICE") {
+//       setOptions([]);
+//       setNextMap({});
+//     }
+
+//     if (newType === "MULTIPLE_CHOICE") {
+//       setNextMap({});
+//     }
+//   };
+
+//   return (
+//     <div
+//       ref={setNodeRef}
+//       style={style}
+//       className="list-group-item mb-2 rounded shadow-sm"
+//     >
+//       <div className="d-flex justify-content-between align-items-start">
+//         {!disabled && (
+//           <span
+//             className="me-2 text-muted"
+//             style={{ cursor: "grab" }}
+//             {...attributes}
+//             {...listeners}
+//           >
+//             ☰
+//           </span>
+//         )}
+
+//         <div className="flex-grow-1">
+//           {isEditing ? (
+//             <>
+//               <input
+//                 className="form-control mb-2"
+//                 value={label}
+//                 onChange={(e) => setLabel(e.target.value)}
+//               />
+//               <select
+//                 className="form-select mb-2"
+//                 value={type}
+//                 // onChange={(e) => setType(e.target.value as QuestionType)}
+//                 onChange={(e) =>
+//                   handleTypeChange(e.target.value as QuestionType)
+//                 }
+//               >
+//                 {QUESTION_TYPES.map((t) => (
+//                   <option key={t} value={t}>
+//                     {t}
+//                   </option>
+//                 ))}
+//               </select>
+//               {(type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE") && (
+//                 <div className="mb-2">
+//                   <strong>Options</strong>
+//                   {options.map((opt, i) => (
+//                     <div key={i} className="input-group mb-1">
+//                       <input
+//                         className="form-control"
+//                         value={opt}
+//                         onChange={(e) => {
+//                           const copy = [...options];
+//                           copy[i] = e.target.value;
+//                           setOptions(copy);
+//                         }}
+//                       />
+//                       <button
+//                         className="btn btn-outline-danger"
+//                         type="button"
+//                         onPointerDown={stopDrag}
+//                         onMouseDown={stopDrag}
+//                         onClick={() => handleDeleteOption(opt, i)}
+//                       >
+//                         ✖
+//                       </button>
+//                     </div>
+//                   ))}
+//                   <button
+//                     className="btn btn-sm btn-primary"
+//                     type="button"
+//                     onPointerDown={stopDrag}
+//                     onMouseDown={stopDrag}
+//                     onClick={() => setOptions([...options, ""])}
+//                   >
+//                     + Ajouter option
+//                   </button>
+//                 </div>
+//               )}
+//               {/* =========== Condition SIMPLE============= */}
+
+//               {/* {type === "SINGLE_CHOICE" &&
+//                 options.filter((o) => o.trim()).length > 0 && (
+//                   <div className="mb-2">
+//                     <strong>Condition SIMPLE (nextMap)</strong>
+//                     {options.map((opt) => (
+//                       <div key={opt} className="input-group mb-1">
+//                         <span className="input-group-text">{opt} →</span>
+//                         <select
+//                           className="form-select"
+//                           value={nextMap[opt] || ""}
+//                           onChange={(e) =>
+//                             setNextMap((prev) => ({
+//                               ...prev,
+//                               [opt]: e.target.value,
+//                             }))
+//                           }
+//                         >
+//                           <option value="">
+//                             -- Choisir la question suivante --
+//                           </option>
+//                           {allQuestions
+//                             .filter(
+//                               (q) =>
+//                                 q.position > question.position &&
+//                                 q.id !== question.id
+//                             )
+//                             .map((q) => (
+//                               <option key={q.id} value={q.id}>
+//                                 {q.position}. {q.label}
+//                               </option>
+//                             ))}
+//                         </select>
+//                       </div>
+//                     ))}
+//                   </div>
+//                 )} */}
+//               {/* =========== Condition SIMPLE ============= */}
+
+//               {type === "SINGLE_CHOICE" &&
+//                 options.filter((o) => o.trim()).length > 0 && (
+//                   <div className="mb-2">
+//                     <strong>Condition SIMPLE (nextMap)</strong>
+
+//                     {options.map((opt) => {
+//                       // 🔹 Regroupement des questions par section
+//                       const questionsBySection = allQuestions
+//                         .filter(
+//                           (q) =>
+//                             q.position > question.position &&
+//                             q.id !== question.id
+//                         )
+//                         .reduce<Record<string, Question[]>>((acc, q) => {
+//                           const key = q.sectionId || "__unassigned__";
+//                           if (!acc[key]) acc[key] = [];
+//                           acc[key].push(q);
+//                           return acc;
+//                         }, {});
+
+//                       return (
+//                         <div key={opt} className="input-group mb-1">
+//                           <span className="input-group-text">{opt} →</span>
+
+//                           <select
+//                             className="form-select"
+//                             value={nextMap[opt] || ""}
+//                             onChange={(e) =>
+//                               setNextMap((prev) => ({
+//                                 ...prev,
+//                                 [opt]: e.target.value,
+//                               }))
+//                             }
+//                           >
+//                             <option value="">
+//                               -- Choisir la question suivante --
+//                             </option>
+
+//                             {Object.entries(questionsBySection).map(
+//                               ([sectionId, questions]) => (
+//                                 <optgroup
+//                                   key={sectionId}
+//                                   label={
+//                                     sectionId === "__unassigned__"
+//                                       ? "🗂️ Sans section"
+//                                       : `📂 Section ${sectionId}`
+//                                   }
+//                                 >
+//                                   {questions.map((q) => (
+//                                     <option key={q.id} value={q.id}>
+//                                       {q.position}. {q.label}
+//                                     </option>
+//                                   ))}
+//                                 </optgroup>
+//                               )
+//                             )}
+//                           </select>
+//                         </div>
+//                       );
+//                     })}
+//                   </div>
+//                 )}
+
+//               {/* ======================== */}
+
+//               {/* ============FIN============ */}
+//               <button
+//                 className="btn btn-sm btn-success me-2"
+//                 onPointerDown={stopDrag}
+//                 onMouseDown={stopDrag}
+//                 onClick={handleSave}
+//               >
+//                 💾 Sauver
+//               </button>
+//               <button
+//                 className="btn btn-sm btn-secondary"
+//                 onPointerDown={stopDrag}
+//                 onMouseDown={stopDrag}
+//                 onClick={() => setIsEditing(false)}
+//               >
+//                 ❌ Annuler
+//               </button>
+//             </>
+//           ) : (
+//             <>
+//               <strong>
+//                 {question.position}. {question.label}
+//               </strong>
+//               <span className="badge bg-info ms-2">{question.type}</span>
+
+//               <button
+//                 className="btn btn-sm btn-outline-secondary ms-2"
+//                 onPointerDown={stopDrag}
+//                 onMouseDown={stopDrag}
+//                 onClick={() => setShowPreview((p) => !p)}
+//               >
+//                 👁️ {showPreview ? "Masquer aperçu" : "Afficher aperçu"}
+//               </button>
+//             </>
+//           )}
+
+//           {showPreview && !isEditing && (
+//             <div className="mt-2">
+//               <QuestionPreview
+//                 label={label}
+//                 type={type}
+//                 options={options}
+//                 config={config}
+//                 nextMap={nextMap}
+//               />
+//             </div>
+//           )}
+//         </div>
+
+//         {!disabled && !isEditing && (
+//           <div className="btn-group btn-group-sm ms-2">
+//             <button
+//               className="btn btn-outline-primary"
+//               onPointerDown={stopDrag}
+//               onMouseDown={stopDrag}
+//               onClick={() => setIsEditing(true)}
+//             >
+//               ✏️
+//             </button>
+//             <button
+//               className="btn btn-outline-danger"
+//               onPointerDown={stopDrag}
+//               onMouseDown={stopDrag}
+//               onClick={handleDelete}
+//             >
+//               🗑️
+//             </button>
+//           </div>
+//         )}
+//       </div>
+//     </div>
+//   );
+// };
+
+// export default SortableQuestionItem;
 
 // // // ========================================== BON avec suppression de question avec confirmation mais pas confirmation de supr des option 22/12/2025
 // import React, { useEffect, useState } from "react";

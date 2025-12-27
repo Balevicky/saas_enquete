@@ -1,19 +1,23 @@
+// src/components/questions/QuestionList.tsx
 import React from "react";
-import { Question } from "../../services/questionService";
 import SortableQuestionItem from "./SortableQuestionItem";
+import { Question } from "../../services/questionService";
+import { Section } from "../../services/sectionService";
 
 interface Props {
   questions: Question[];
-  disabled?: boolean;
+  sections: Section[];
   onDelete: (id: string) => void;
   onUpdate: (id: string, data: Partial<Question>) => void;
+  disabled?: boolean;
 }
 
 const QuestionList: React.FC<Props> = ({
   questions,
-  disabled,
+  sections,
   onDelete,
   onUpdate,
+  disabled,
 }) => {
   return (
     <div>
@@ -21,7 +25,8 @@ const QuestionList: React.FC<Props> = ({
         <SortableQuestionItem
           key={q.id}
           question={q}
-          allQuestions={questions} /* ✅ OBLIGATOIRE */
+          allQuestions={questions} // ✅ nécessaire pour nextMap
+          sections={sections} // ✅ passer sections pour afficher titre réel
           onDelete={onDelete}
           onUpdate={onUpdate}
           disabled={disabled}
@@ -32,6 +37,42 @@ const QuestionList: React.FC<Props> = ({
 };
 
 export default QuestionList;
+
+// ============================= TRES BON
+// import React from "react";
+// import { Question } from "../../services/questionService";
+// import SortableQuestionItem from "./SortableQuestionItem";
+
+// interface Props {
+//   questions: Question[];
+//   disabled?: boolean;
+//   onDelete: (id: string) => void;
+//   onUpdate: (id: string, data: Partial<Question>) => void;
+// }
+
+// const QuestionList: React.FC<Props> = ({
+//   questions,
+//   disabled,
+//   onDelete,
+//   onUpdate,
+// }) => {
+//   return (
+//     <div>
+//       {questions.map((q) => (
+//         <SortableQuestionItem
+//           key={q.id}
+//           question={q}
+//           allQuestions={questions} /* ✅ OBLIGATOIRE */
+//           onDelete={onDelete}
+//           onUpdate={onUpdate}
+//           disabled={disabled}
+//         />
+//       ))}
+//     </div>
+//   );
+// };
+
+// export default QuestionList;
 
 // =============================
 // import React from "react";
